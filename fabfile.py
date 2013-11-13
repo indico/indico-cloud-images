@@ -28,6 +28,10 @@ env.httpd_conf_dir = '/etc/httpd/conf'
 env.httpd_confd_dir = '/etc/httpd/conf.d'
 env.iptables_dir = '/etc/sysconfig'
 env.ssl_dir = '/etc/ssl'
+env.ssl_cert_dirname = 'certs'
+env.ssl_cert_dir = os.path.join(env.ssl_dir, env.ssl_cert_dirname)
+env.ssl_private_dirname = 'private'
+env.ssl_private_dir = os.path.join(env.ssl_dir, env.ssl_private_dirname)
 
 env.virtualization_cmd = 'kvm'
 
@@ -83,15 +87,18 @@ def config_indico(host_name=env.host_name, config_dir=env.config_dir,
     _args_setup(host_name=host_name, config_dir=config_dir, indico_inst_dir=indico_inst_dir, \
                 http_port=http_port, https_port=https_port)
 
-    # Moving the Indico Apache .conf file
+    # Moving and modifying the Indico Apache .conf file
     put(os.path.join(env.config_dir, 'indico.conf'), env.httpd_confd_dir)
+    sed(os.path.join(env.httpd_confd_dir, 'indico.conf'), '/opt/indico', env.indico_inst_dir)
+    sed(os.path.join(env.httpd_confd_dir, 'indico.conf'), '/etc/ssl/certs', env.ssl_cert_dir)
+    sed(os.path.join(env.httpd_confd_dir, 'indico.conf'), '/etc/ssl/private', env.ssl_private_dir)
 
     # Self-generating an ssl certificate
-    run("mkdir -p {0}".format(os.path.join(env.ssl_dir, 'certs')))
-    run("mkdir -p {0}".format(os.path.join(env.ssl_dir, 'private')))
+    run("mkdir -p {0}".format(env.ssl_cert_dir))
+    run("mkdir -p {0}".format(env.ssl_private_dir))
     run("openssl req -new -x509 -nodes -out {0} -keyout {1} -days 3650 -subj \'/CN={2}\'" \
-        .format (os.path.join(env.ssl_dir, 'certs/self-gen.pem'), \
-                 os.path.join(env.ssl_dir, 'private/self-gen.key'), \
+        .format (os.path.join(env.ssl_cert_dir, 'self-gen.pem'), \
+                 os.path.join(env.ssl_private_dir, 'self-gen.key'), \
                  env.host_name))
 
     # Adding a ServerName in httpd.conf
@@ -127,6 +134,23 @@ def config_indico(host_name=env.host_name, config_dir=env.config_dir,
     # Modifying the ssl.conf file
     put(os.path.join(env.config_dir, 'ssl.conf'), env.httpd_confd_dir)
 
+    # Change SELinux policies to allow Apache access
+    run("semanage fcontext -a -t httpd_sys_content_t \'{0}(/.*)?\'" \
+        .format(os.path.join(env.indico_inst_dir, 'archive')))
+    run("semanage fcontext -a -t httpd_sys_content_t \'{0}(/.*)?\'" \
+        .format(os.path.join(env.indico_inst_dir, 'cache')))
+    run("semanage fcontext -a -t httpd_sys_content_t \'{0}(/.*)?\'" \
+        .format(env.db_inst_dir))
+    run("semanage fcontext -a -t httpd_sys_content_t \'{0}(/.*)?\'" \
+        .format(os.path.join(env.indico_inst_dir, 'htdocs')))
+    run("semanage fcontext -a -t httpd_sys_content_t \'{0}(/.*)?\'" \
+        .format(os.path.join(env.indico_inst_dir, 'log')))
+    run("semanage fcontext -a -t httpd_sys_content_t \'{0}(/.*)?\'" \
+        .format(os.path.join(env.indico_inst_dir, 'tmp')))
+    run("restorecon -Rv {0}".format(env.indico_inst_dir))
+    run("restorecon -Rv {0}".format(env.db_inst_dir))
+    run('setsebool -P httpd_can_network_connect 1')
+
 def deploy(host_name=env.host_name, config_dir=env.config_dir, 
            indico_inst_dir=env.indico_inst_dir, db_inst_dir=None,
            http_port=env.http_port, https_port=env.https_port):
@@ -147,13 +171,6 @@ def start_db(indico_inst_dir=env.indico_inst_dir):
 
     run("zdaemon -C {0} start".format(os.path.join(env.indico_conf_dir, 'zdctl.conf')))
 
-def disable_sel():
-    """
-    Disable SELinux
-    """
-
-    run('echo 0 >/selinux/enforce')
-
 def start_httpd():
     """
     Start Apache
@@ -167,7 +184,6 @@ def start(indico_inst_dir=env.indico_inst_dir):
     """
 
     start_db(indico_inst_dir)
-    disable_sel()
     start_httpd()
 
 def run_vm(host_port=env.host_port, img_path=env.img_path,
