@@ -78,14 +78,14 @@ def indico_inst(indico_inst_dir=env.indico_inst_dir, db_inst_dir=None):
 
 
 def indico_config(host_name=env.host_name, config_dir=env.config_dir,
-                  indico_inst_dir=env.indico_inst_dir, db_inst_dir=env.indico_inst_dir,
-                  http_port=env.http_port, https_port=env.https_port):
+                  indico_inst_dir=env.indico_inst_dir, http_port=env.http_port,
+                  https_port=env.https_port):
     """
     Configure Indico and the database
     """
 
     _args_setup(host_name=host_name, config_dir=config_dir, indico_inst_dir=indico_inst_dir, \
-                db_inst_dir=db_inst_dir, http_port=http_port, https_port=https_port)
+                http_port=http_port, https_port=https_port)
 
     # Moving and modifying the Indico Apache .conf file
     put(os.path.join(env.config_dir, 'indico.conf'), env.httpd_confd_dir)
@@ -93,29 +93,10 @@ def indico_config(host_name=env.host_name, config_dir=env.config_dir,
     sed(os.path.join(env.httpd_confd_dir, 'indico.conf'), '/etc/ssl/certs', env.ssl_cert_dir)
     sed(os.path.join(env.httpd_confd_dir, 'indico.conf'), '/etc/ssl/private', env.ssl_private_dir)
 
-    # Self-generating an ssl certificate
-    run("mkdir -p {0}".format(env.ssl_cert_dir))
-    run("mkdir -p {0}".format(env.ssl_private_dir))
-    run("openssl req -new -x509 -nodes -out {0} -keyout {1} -days 3650 -subj \'/CN={2}\'" \
-        .format (os.path.join(env.ssl_cert_dir, 'self-gen.pem'), \
-                 os.path.join(env.ssl_private_dir, 'self-gen.key'), \
-                 env.host_name))
-
     # Adding a ServerName in httpd.conf
     sed(os.path.join(env.httpd_conf_dir, 'httpd.conf'), \
         '#ServerName www.example.com:80', \
         "ServerName {0}".format(env.host_name))
-
-    # Adding the ports 80 and 443 to the iptables
-    run("sed \"11i\\-A INPUT -m state --state NEW -m tcp -p tcp --dport 80 -j ACCEPT\" {0} > {1}" \
-        .format(os.path.join(env.iptables_dir, 'iptables'), os.path.join(env.iptables_dir, 'temp')))
-    run("mv -f {0} {1}"\
-        .format(os.path.join(env.iptables_dir, 'temp'), os.path.join(env.iptables_dir, 'iptables')))
-    run("sed \"12i\\-A INPUT -m state --state NEW -m tcp -p tcp --dport 443 -j ACCEPT\" {0} > {1}" \
-        .format(os.path.join(env.iptables_dir, 'iptables'), os.path.join(env.iptables_dir, 'temp')))
-    run("mv -f {0} {1}"\
-        .format(os.path.join(env.iptables_dir, 'temp'), os.path.join(env.iptables_dir, 'iptables')))
-    run('service iptables restart')
 
     # Adding the corresponding ports to indico.conf
     sed(os.path.join(env.indico_conf_dir, 'indico.conf'), \
@@ -130,6 +111,34 @@ def indico_config(host_name=env.host_name, config_dir=env.config_dir,
         '#   LoginURL             = \"\"', \
         "LoginURL             = \"https://{0}:{1}/indico/signIn.py\"" \
         .format(env.host_name, env.https_port))
+
+def vm_config(host_name=env.host_name, config_dir=env.config_dir,
+              indico_inst_dir=env.indico_inst_dir, db_inst_dir=env.db_inst_dir):
+    """
+    Configures other aspects of the VM
+    """
+
+    _args_setup(host_name=host_name, config_dir=config_dir, \
+                indico_inst_dir=indico_inst_dir, db_inst_dir=db_inst_dir)
+
+    # Self-generating an ssl certificate
+    run("mkdir -p {0}".format(env.ssl_cert_dir))
+    run("mkdir -p {0}".format(env.ssl_private_dir))
+    run("openssl req -new -x509 -nodes -out {0} -keyout {1} -days 3650 -subj \'/CN={2}\'" \
+        .format (os.path.join(env.ssl_cert_dir, 'self-gen.pem'), \
+                 os.path.join(env.ssl_private_dir, 'self-gen.key'), \
+                 env.host_name))
+
+    # Adding the ports 80 and 443 to the iptables
+    run("sed \"11i\\-A INPUT -m state --state NEW -m tcp -p tcp --dport 80 -j ACCEPT\" {0} > {1}" \
+        .format(os.path.join(env.iptables_dir, 'iptables'), os.path.join(env.iptables_dir, 'temp')))
+    run("mv -f {0} {1}"\
+        .format(os.path.join(env.iptables_dir, 'temp'), os.path.join(env.iptables_dir, 'iptables')))
+    run("sed \"12i\\-A INPUT -m state --state NEW -m tcp -p tcp --dport 443 -j ACCEPT\" {0} > {1}" \
+        .format(os.path.join(env.iptables_dir, 'iptables'), os.path.join(env.iptables_dir, 'temp')))
+    run("mv -f {0} {1}"\
+        .format(os.path.join(env.iptables_dir, 'temp'), os.path.join(env.iptables_dir, 'iptables')))
+    run('service iptables restart')
 
     # Modifying the ssl.conf file
     put(os.path.join(env.config_dir, 'ssl.conf'), env.httpd_confd_dir)
@@ -151,6 +160,15 @@ def indico_config(host_name=env.host_name, config_dir=env.config_dir,
     run("restorecon -Rv {0}".format(env.db_inst_dir))
     run('setsebool -P httpd_can_network_connect 1')
 
+def config(host_name=env.host_name, config_dir=env.config_dir, indico_inst_dir=env.indico_inst_dir,
+           db_inst_dir=env.db_inst_dir, http_port=env.http_port, https_port=env.https_port):
+    """
+    Configure Indico and various aspects of the VM
+    """
+
+    indico_config(host_name, config_dir, indico_inst_dir, http_port, https_port)
+    vm_config(host_name, config_dir, indico_inst_dir, db_inst_dir)
+
 def deploy(host_name=env.host_name, config_dir=env.config_dir, 
            indico_inst_dir=env.indico_inst_dir, db_inst_dir=None,
            http_port=env.http_port, https_port=env.https_port):
@@ -160,7 +178,7 @@ def deploy(host_name=env.host_name, config_dir=env.config_dir,
 
     dependencies_inst()
     indico_inst(indico_inst_dir, db_inst_dir)
-    indico_config(host_name, config_dir, indico_inst_dir, db_inst_dir, http_port, https_port)
+    config(host_name, config_dir, indico_inst_dir, db_inst_dir, http_port, https_port)
 
 def start_db(indico_inst_dir=env.indico_inst_dir):
     """
