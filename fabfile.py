@@ -77,15 +77,15 @@ def indico_inst(indico_inst_dir=env.indico_inst_dir, db_inst_dir=None):
         .format(env.indico_inst_dir, env.db_inst_dir))
 
 
-def config_indico(host_name=env.host_name, config_dir=env.config_dir,
-                  indico_inst_dir=env.indico_inst_dir, http_port=env.http_port,
-                  https_port=env.https_port):
+def indico_config(host_name=env.host_name, config_dir=env.config_dir,
+                  indico_inst_dir=env.indico_inst_dir, db_inst_dir=env.indico_inst_dir,
+                  http_port=env.http_port, https_port=env.https_port):
     """
     Configure Indico and the database
     """
 
     _args_setup(host_name=host_name, config_dir=config_dir, indico_inst_dir=indico_inst_dir, \
-                http_port=http_port, https_port=https_port)
+                db_inst_dir=db_inst_dir, http_port=http_port, https_port=https_port)
 
     # Moving and modifying the Indico Apache .conf file
     put(os.path.join(env.config_dir, 'indico.conf'), env.httpd_confd_dir)
@@ -160,7 +160,7 @@ def deploy(host_name=env.host_name, config_dir=env.config_dir,
 
     dependencies_inst()
     indico_inst(indico_inst_dir, db_inst_dir)
-    config_indico(host_name, config_dir, indico_inst_dir, http_port, https_port)
+    indico_config(host_name, config_dir, indico_inst_dir, db_inst_dir, http_port, https_port)
 
 def start_db(indico_inst_dir=env.indico_inst_dir):
     """
