@@ -1,42 +1,26 @@
 from fabric.api import *
 from fabric.contrib.files import sed
 from fabric.operations import put, run
+from fabric.main import load_settings
 import os
 
-env.user_name = 'root'
-env.password = 'passw0rd'
-env.host_name = '127.0.0.1'
-env.host_port = '2222'
-env.http_port = '8000'
-env.https_port = '8443'
+env.conf = 'fabfile.conf'
+
+settings = load_settings(env.conf)
+if not settings:
+    raise RuntimeError("Configuration file {0} is needed!".format(env.conf))
+env.update(settings)
+
 env.hosts = ["{0}@{1}:{2}".format(env.user_name, env.host_name, env.host_port)]
-env.no_agent = True
 
-env.config_dir = 'config'
-env.img_dir = 'img'
-env.img_name = 'SLC6.qcow2'
 env.img_path = os.path.join(env.img_dir, env.img_name)
-env.vd_name = 'init.iso'
 env.vd_path = os.path.join(env.img_dir, env.vd_name)
-env.qemu_log = 'qemu-output.log'
 
-
-env.indico_inst_dir = '/opt/indico'
-env.db_inst_dirname = 'db'
 env.db_inst_dir = os.path.join(env.indico_inst_dir, env.db_inst_dirname)
 
-env.indico_conf_dirname = 'etc'
 env.indico_conf_dir = os.path.join(env.indico_inst_dir, env.indico_conf_dirname)
-env.httpd_conf_dir = '/etc/httpd/conf'
-env.httpd_confd_dir = '/etc/httpd/conf.d'
-env.iptables_dir = '/etc/sysconfig'
-env.ssl_dir = '/etc/ssl'
-env.ssl_cert_dirname = 'certs'
 env.ssl_cert_dir = os.path.join(env.ssl_dir, env.ssl_cert_dirname)
-env.ssl_private_dirname = 'private'
 env.ssl_private_dir = os.path.join(env.ssl_dir, env.ssl_private_dirname)
-
-env.virtualization_cmd = 'kvm'
 
 def _args_setup(host_name=env.host_name, host_port=env.host_port, config_dir=env.config_dir,
                 img_path=env.img_path, vd_path=env.vd_path, indico_inst_dir=env.indico_inst_dir,
