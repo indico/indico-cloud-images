@@ -4,11 +4,13 @@ from fabric.operations import put, run
 import os
 
 env.user_name = 'root'
+env.password = 'passw0rd'
 env.host_name = '127.0.0.1'
 env.host_port = '2222'
 env.http_port = '8000'
 env.https_port = '8443'
 env.hosts = ["{0}@{1}:{2}".format(env.user_name, env.host_name, env.host_port)]
+env.no_agent = True
 
 env.config_dir = 'config'
 env.img_dir = 'img'
@@ -16,6 +18,7 @@ env.img_name = 'SLC6.qcow2'
 env.img_path = os.path.join(env.img_dir, env.img_name)
 env.vd_name = 'init.iso'
 env.vd_path = os.path.join(env.img_dir, env.vd_name)
+env.qemu_log = 'qemu-output.log'
 
 
 env.indico_inst_dir = '/opt/indico'
@@ -215,10 +218,16 @@ def run_vm(host_port=env.host_port, img_path=env.img_path,
                 vd_path=vd_path, virtualization_cmd=virtualization_cmd, \
                 http_port=http_port, https_port=https_port)
 
+    local("echo \"\" > {0}".format(env.qemu_log))
     local("{0} -m 256 -redir tcp:{1}::22 -redir tcp:{2}::80 -redir tcp:{3}::443 \
-          -net nic -net user, -drive file={4},if=virtio -drive file={5},if=virtio" \
+          -net nic -net user, -drive file={4},if=virtio -drive file={5},if=virtio \
+          -serial file:{6} -daemonize" \
           .format(env.virtualization_cmd, env.host_port, env.http_port, \
-                  env.https_port, env.img_path, env.vd_path))
+                  env.https_port, env.img_path, env.vd_path, env.qemu_log))
+    print("Booting up VM...")
+    local("while ! grep -q \"Starting atd:.*[.*OK.*]\" \"{0}\"; do sleep 10; done" \
+          .format(env.qemu_log))
+    print("VM running!")
 
 def config_cloud_init(config_dir=env.config_dir, vd_path=env.vd_path):
     """
@@ -227,9 +236,21 @@ def config_cloud_init(config_dir=env.config_dir, vd_path=env.vd_path):
 
     _args_setup(config_dir=config_dir, vd_path=vd_path)
 
+    local("sed -i \'s|password:.*|password: {0}|g\' {1}" \
+          .format(env.password, os.path.join(env.config_dir, 'user-data')))
     local("mkisofs -output {0} -volid cidata -joliet -rock {1} {2}" \
           .format(env.vd_path, os.path.join(env.config_dir, 'user-data'), \
                   os.path.join(env.config_dir, 'meta-data')))
+
+def launch(host_port=env.host_port, img_path=env.img_path, vd_path=env.vd_path,
+           indico_inst_dir=env.indico_inst_dir, virtualization_cmd=env.virtualization_cmd,
+           http_port=env.http_port, https_port=env.https_port):
+    """
+    Run the VM and start Indico
+    """
+
+    run_vm(host_port, img_path, vd_path, virtualization_cmd, http_port, https_port)
+    start(indico_inst_dir)
 
 def set_up_vm(host_name=env.host_name, host_port=env.host_port, config_dir=env.config_dir,
               img_path=env.img_path, vd_path=env.vd_path, indico_inst_dir=env.indico_inst_dir,
@@ -241,6 +262,5 @@ def set_up_vm(host_name=env.host_name, host_port=env.host_port, config_dir=env.c
 
     config_cloud_init(config_dir, vd_path)
     run_vm(host_port, img_path, vd_path, virtualization_cmd, http_port, https_port)
-    # something that makes the fabfile wait till the bootup is complete
     deploy(host_name, config_dir, indico_inst_dir, db_inst_dir, http_port, https_port)
     start(indico_inst_dir)
