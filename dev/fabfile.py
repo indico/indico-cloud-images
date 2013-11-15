@@ -17,15 +17,15 @@ env.img_path = os.path.join(env.img_dir, env.img_name)
 env.vd_path = os.path.join(env.img_dir, env.vd_name)
 
 env.db_inst_dir = os.path.join(env.indico_inst_dir, env.db_inst_dirname)
-
 env.indico_conf_dir = os.path.join(env.indico_inst_dir, env.indico_conf_dirname)
+
 env.ssl_certs_dir = os.path.join(env.ssl_dir, env.ssl_certs_dirname)
 env.ssl_private_dir = os.path.join(env.ssl_dir, env.ssl_private_dirname)
 
-def _args_setup(host_name=env.host_name, host_port=env.host_port, config_dir=env.config_dir,
-                img_path=env.img_path, vd_path=env.vd_path, indico_inst_dir=env.indico_inst_dir,
-                db_inst_dir=None, virtualization_cmd=env.virtualization_cmd, http_port=env.http_port,
-                https_port=env.https_port, ssl_pem_path=env.ssl_pem_path, ssl_key_path=env.ssl_key_path):
+def _update_params(host_name=env.host_name, host_port=env.host_port, config_dir=env.config_dir,
+                   img_path=env.img_path, vd_path=env.vd_path, indico_inst_dir=env.indico_inst_dir,
+                   db_inst_dir=None, virtualization_cmd=env.virtualization_cmd, http_port=env.http_port,
+                   https_port=env.https_port):
     """
     Updates the parameters with the passed arguments
     """
@@ -45,9 +45,7 @@ def _args_setup(host_name=env.host_name, host_port=env.host_port, config_dir=env
     env.virtualization_cmd = virtualization_cmd
     env.http_port = http_port
     env.https_port = https_port
-    env.ssl_pem_path = ssl_pem_path
-    env.ssl_key_path = ssl_key_path
-    
+
 def _putl(source_file, dest_dir):
     """
     To be used instead of put, since it doesn't support symbolic links
@@ -56,6 +54,7 @@ def _putl(source_file, dest_dir):
     put(source_file, '/')
     run("mv -f /{0} {1}".format(os.path.basename(source_file), dest_dir))
 
+@task
 def dependencies_inst():
     """
     Dependencies installation
@@ -65,18 +64,20 @@ def dependencies_inst():
         python-reportlab.x86_64 python-imaging.x86_64 python-lxml.x86_64 mod_ssl.x86_64')
     run('easy_install ZODB3==3.10.5 zc.queue==1.3')
 
+@task
 def indico_inst(indico_inst_dir=env.indico_inst_dir, db_inst_dir=None):
     """
     Indico installation and first setup
     """
 
-    _args_setup(indico_inst_dir=indico_inst_dir, db_inst_dir=db_inst_dir)
+    _update_params(indico_inst_dir=indico_inst_dir, db_inst_dir=db_inst_dir)
 
     run('easy_install indico')
     run("echo -e \"{0}\nc\ny\n{1}\" | indico_initial_setup"\
         .format(env.indico_inst_dir, env.db_inst_dir))
 
 
+@task
 def indico_config(host_name=env.host_name, config_dir=env.config_dir,
                   indico_inst_dir=env.indico_inst_dir, http_port=env.http_port,
                   https_port=env.https_port):
@@ -84,8 +85,8 @@ def indico_config(host_name=env.host_name, config_dir=env.config_dir,
     Configure Indico and the database
     """
 
-    _args_setup(host_name=host_name, config_dir=config_dir, indico_inst_dir=indico_inst_dir, \
-                http_port=http_port, https_port=https_port)
+    _update_params(host_name=host_name, config_dir=config_dir, indico_inst_dir=indico_inst_dir, \
+                   http_port=http_port, https_port=https_port)
 
     # Moving and modifying the Indico Apache .conf file
     _putl(os.path.join(env.config_dir, 'indico.conf'), env.httpd_confd_dir)
@@ -112,14 +113,15 @@ def indico_config(host_name=env.host_name, config_dir=env.config_dir,
         "LoginURL             = \"https://{0}:{1}/indico/signIn.py\"" \
         .format(env.host_name, env.https_port))
 
+@task
 def vm_config(host_name=env.host_name, config_dir=env.config_dir,
               indico_inst_dir=env.indico_inst_dir, db_inst_dir=env.db_inst_dir):
     """
     Configures other aspects of the VM
     """
 
-    _args_setup(host_name=host_name, config_dir=config_dir, \
-                indico_inst_dir=indico_inst_dir, db_inst_dir=db_inst_dir)
+    _update_params(host_name=host_name, config_dir=config_dir, \
+                   indico_inst_dir=indico_inst_dir, db_inst_dir=db_inst_dir)
 
     # Self-generating an ssl certificate
     run("mkdir -p {0}".format(env.ssl_certs_dir))
@@ -160,6 +162,7 @@ def vm_config(host_name=env.host_name, config_dir=env.config_dir,
     run("restorecon -Rv {0}".format(env.db_inst_dir))
     run('setsebool -P httpd_can_network_connect 1')
 
+@task
 def config(host_name=env.host_name, config_dir=env.config_dir, indico_inst_dir=env.indico_inst_dir,
            db_inst_dir=env.db_inst_dir, http_port=env.http_port, https_port=env.https_port):
     """
@@ -169,6 +172,7 @@ def config(host_name=env.host_name, config_dir=env.config_dir, indico_inst_dir=e
     indico_config(host_name, config_dir, indico_inst_dir, http_port, https_port)
     vm_config(host_name, config_dir, indico_inst_dir, db_inst_dir)
 
+@task
 def deploy(host_name=env.host_name, config_dir=env.config_dir, 
            indico_inst_dir=env.indico_inst_dir, db_inst_dir=None,
            http_port=env.http_port, https_port=env.https_port):
@@ -180,15 +184,17 @@ def deploy(host_name=env.host_name, config_dir=env.config_dir,
     indico_inst(indico_inst_dir, db_inst_dir)
     config(host_name, config_dir, indico_inst_dir, db_inst_dir, http_port, https_port)
 
+@task
 def start_db(indico_inst_dir=env.indico_inst_dir):
     """
     Start the database
     """
 
-    _args_setup(indico_inst_dir=indico_inst_dir)
+    _update_params(indico_inst_dir=indico_inst_dir)
 
     run("zdaemon -C {0} start".format(os.path.join(env.indico_conf_dir, 'zdctl.conf')))
 
+@task
 def start_httpd():
     """
     Start Apache
@@ -196,6 +202,7 @@ def start_httpd():
 
     run('service httpd start')
 
+@task
 def start(indico_inst_dir=env.indico_inst_dir):
     """
     Start Indico
@@ -204,6 +211,7 @@ def start(indico_inst_dir=env.indico_inst_dir):
     start_db(indico_inst_dir)
     start_httpd()
 
+@task
 def run_vm(host_port=env.host_port, img_path=env.img_path,
            vd_path=env.vd_path, virtualization_cmd=env.virtualization_cmd,
            http_port=env.http_port, https_port=env.https_port):
@@ -211,9 +219,9 @@ def run_vm(host_port=env.host_port, img_path=env.img_path,
     Run the Virtual Machine
     """
 
-    _args_setup(host_port=host_port, img_path=img_path, \
-                vd_path=vd_path, virtualization_cmd=virtualization_cmd, \
-                http_port=http_port, https_port=https_port)
+    _update_params(host_port=host_port, img_path=img_path, \
+                   vd_path=vd_path, virtualization_cmd=virtualization_cmd, \
+                   http_port=http_port, https_port=https_port)
 
     local("echo \"\" > {0}".format(env.qemu_log))
     local("{0} -m 256 -redir tcp:{1}::22 -redir tcp:{2}::80 -redir tcp:{3}::443 \
@@ -226,12 +234,13 @@ def run_vm(host_port=env.host_port, img_path=env.img_path,
           .format(env.qemu_log))
     print("VM running!")
 
+@task
 def config_cloud_init(config_dir=env.config_dir, vd_path=env.vd_path):
     """
     Configure Cloud-Init files
     """
 
-    _args_setup(config_dir=config_dir, vd_path=vd_path)
+    _update_params(config_dir=config_dir, vd_path=vd_path)
 
     local("sed -i \'s|password:.*|password: {0}|g\' {1}" \
           .format(env.password, os.path.join(env.config_dir, 'user-data')))
@@ -239,26 +248,7 @@ def config_cloud_init(config_dir=env.config_dir, vd_path=env.vd_path):
           .format(env.vd_path, os.path.join(env.config_dir, 'user-data'), \
                   os.path.join(env.config_dir, 'meta-data')))
 
-def load_ssl(ssl_pem_path=env.ssl_pem_path, ssl_key_path=env.ssl_key_path):
-    """
-    Load a personal SSL certificate into the VM
-    """
-
-    _args_setup(ssl_pem_path=ssl_pem_path, ssl_key_path=ssl_key_path)
-
-    # Copy the new certificate
-    _putl(env.ssl_pem_path, env.ssl_certs_dir)
-    _putl(env.ssl_key_path, env.ssl_private_dir)
-
-    # Modify the indico.conf SSL entries
-    sed(os.path.join(env.httpd_confd_dir, 'indico.conf'), \
-        "{0}.*.pem".format(env.ssl_certs_dir), \
-        os.path.join(env.ssl_certs_dir, os.path.basename(env.ssl_pem_path)))
-    sed(os.path.join(env.httpd_confd_dir, 'indico.conf'), \
-        "{0}.*.key".format(env.ssl_private_dir), \
-        os.path.join(env.ssl_private_dir, os.path.basename(env.ssl_key_path)))
-
-
+@task
 def launch(host_port=env.host_port, img_path=env.img_path, vd_path=env.vd_path,
            indico_inst_dir=env.indico_inst_dir, virtualization_cmd=env.virtualization_cmd,
            http_port=env.http_port, https_port=env.https_port):
@@ -269,6 +259,7 @@ def launch(host_port=env.host_port, img_path=env.img_path, vd_path=env.vd_path,
     run_vm(host_port, img_path, vd_path, virtualization_cmd, http_port, https_port)
     start(indico_inst_dir)
 
+@task
 def set_up_vm(host_name=env.host_name, host_port=env.host_port, config_dir=env.config_dir,
               img_path=env.img_path, vd_path=env.vd_path, indico_inst_dir=env.indico_inst_dir,
               db_inst_dir=None, virtualization_cmd=env.virtualization_cmd, http_port=env.http_port,
