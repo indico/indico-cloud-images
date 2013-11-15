@@ -19,13 +19,17 @@ env.vd_path = os.path.join(env.img_dir, env.vd_name)
 env.db_inst_dir = os.path.join(env.indico_inst_dir, env.db_inst_dirname)
 
 env.indico_conf_dir = os.path.join(env.indico_inst_dir, env.indico_conf_dirname)
-env.ssl_cert_dir = os.path.join(env.ssl_dir, env.ssl_cert_dirname)
+env.ssl_certs_dir = os.path.join(env.ssl_dir, env.ssl_certs_dirname)
 env.ssl_private_dir = os.path.join(env.ssl_dir, env.ssl_private_dirname)
 
 def _args_setup(host_name=env.host_name, host_port=env.host_port, config_dir=env.config_dir,
                 img_path=env.img_path, vd_path=env.vd_path, indico_inst_dir=env.indico_inst_dir,
                 db_inst_dir=None, virtualization_cmd=env.virtualization_cmd, http_port=env.http_port,
-                https_port=env.https_port):
+                https_port=env.https_port, ssl_pem_path=env.ssl_pem_path, ssl_key_path=env.ssl_key_path):
+    """
+    Updates the parameters with the passed arguments
+    """
+
     env.host_name = host_name
     env.host_port = host_port
     env.hosts[0] = "{0}@{1}:{2}".format(env.user_name, env.host_name, env.host_port)
@@ -41,7 +45,16 @@ def _args_setup(host_name=env.host_name, host_port=env.host_port, config_dir=env
     env.virtualization_cmd = virtualization_cmd
     env.http_port = http_port
     env.https_port = https_port
+    env.ssl_pem_path = ssl_pem_path
+    env.ssl_key_path = ssl_key_path
     
+def _putl(source_file, dest_dir):
+    """
+    To be used instead of put, since it doesn't support symbolic links
+    """
+
+    put(source_file, '/')
+    run("mv -f /{0} {1}".format(os.path.basename(source_file), dest_dir))
 
 def dependencies_inst():
     """
@@ -75,9 +88,9 @@ def indico_config(host_name=env.host_name, config_dir=env.config_dir,
                 http_port=http_port, https_port=https_port)
 
     # Moving and modifying the Indico Apache .conf file
-    put(os.path.join(env.config_dir, 'indico.conf'), env.httpd_confd_dir)
+    _putl(os.path.join(env.config_dir, 'indico.conf'), env.httpd_confd_dir)
     sed(os.path.join(env.httpd_confd_dir, 'indico.conf'), '/opt/indico', env.indico_inst_dir)
-    sed(os.path.join(env.httpd_confd_dir, 'indico.conf'), '/etc/ssl/certs', env.ssl_cert_dir)
+    sed(os.path.join(env.httpd_confd_dir, 'indico.conf'), '/etc/ssl/certs', env.ssl_certs_dir)
     sed(os.path.join(env.httpd_confd_dir, 'indico.conf'), '/etc/ssl/private', env.ssl_private_dir)
 
     # Adding a ServerName in httpd.conf
@@ -109,10 +122,10 @@ def vm_config(host_name=env.host_name, config_dir=env.config_dir,
                 indico_inst_dir=indico_inst_dir, db_inst_dir=db_inst_dir)
 
     # Self-generating an ssl certificate
-    run("mkdir -p {0}".format(env.ssl_cert_dir))
+    run("mkdir -p {0}".format(env.ssl_certs_dir))
     run("mkdir -p {0}".format(env.ssl_private_dir))
     run("openssl req -new -x509 -nodes -out {0} -keyout {1} -days 3650 -subj \'/CN={2}\'" \
-        .format (os.path.join(env.ssl_cert_dir, 'self-gen.pem'), \
+        .format (os.path.join(env.ssl_certs_dir, 'self-gen.pem'), \
                  os.path.join(env.ssl_private_dir, 'self-gen.key'), \
                  env.host_name))
 
@@ -128,7 +141,7 @@ def vm_config(host_name=env.host_name, config_dir=env.config_dir,
     run('service iptables restart')
 
     # Modifying the ssl.conf file
-    put(os.path.join(env.config_dir, 'ssl.conf'), env.httpd_confd_dir)
+    _putl(os.path.join(env.config_dir, 'ssl.conf'), env.httpd_confd_dir)
 
     # Change SELinux policies to allow Apache access
     run("semanage fcontext -a -t httpd_sys_content_t \'{0}(/.*)?\'" \
@@ -209,7 +222,7 @@ def run_vm(host_port=env.host_port, img_path=env.img_path,
           .format(env.virtualization_cmd, env.host_port, env.http_port, \
                   env.https_port, env.img_path, env.vd_path, env.qemu_log))
     print("Booting up VM...")
-    local("while ! grep -q \"Starting atd:.*[.*OK.*]\" \"{0}\"; do sleep 10; done" \
+    local("while ! grep -q \"Starting atd:.*[.*OK.*]\" \"{0}\"; do sleep 5; done" \
           .format(env.qemu_log))
     print("VM running!")
 
@@ -225,6 +238,26 @@ def config_cloud_init(config_dir=env.config_dir, vd_path=env.vd_path):
     local("mkisofs -output {0} -volid cidata -joliet -rock {1} {2}" \
           .format(env.vd_path, os.path.join(env.config_dir, 'user-data'), \
                   os.path.join(env.config_dir, 'meta-data')))
+
+def load_ssl(ssl_pem_path=env.ssl_pem_path, ssl_key_path=env.ssl_key_path):
+    """
+    Load a personal SSL certificate into the VM
+    """
+
+    _args_setup(ssl_pem_path=ssl_pem_path, ssl_key_path=ssl_key_path)
+
+    # Copy the new certificate
+    _putl(env.ssl_pem_path, env.ssl_certs_dir)
+    _putl(env.ssl_key_path, env.ssl_private_dir)
+
+    # Modify the indico.conf SSL entries
+    sed(os.path.join(env.httpd_confd_dir, 'indico.conf'), \
+        "{0}.*.pem".format(env.ssl_certs_dir), \
+        os.path.join(env.ssl_certs_dir, os.path.basename(env.ssl_pem_path)))
+    sed(os.path.join(env.httpd_confd_dir, 'indico.conf'), \
+        "{0}.*.key".format(env.ssl_private_dir), \
+        os.path.join(env.ssl_private_dir, os.path.basename(env.ssl_key_path)))
+
 
 def launch(host_port=env.host_port, img_path=env.img_path, vd_path=env.vd_path,
            indico_inst_dir=env.indico_inst_dir, virtualization_cmd=env.virtualization_cmd,
