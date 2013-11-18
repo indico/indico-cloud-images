@@ -11,7 +11,12 @@ if not settings:
     raise RuntimeError("Configuration file {0} is needed!".format(env.conf))
 env.update(settings)
 
-env.hosts = ["{0}@{1}:{2}".format(env.user_name, env.host_name, env.host_port)]
+if env.debug == 'True':
+    env.ports = [env.http_port_fwd, env.https_port_fwd]
+else:
+    env.ports = [env.http_port, env.https_port]
+
+env.hosts = ["{0}@{1}:{2}".format(env.user_name, env.host_name, env.host_port_fwd)]
 
 env.img_path = os.path.join(env.img_dir, env.img_name)
 env.vd_path = os.path.join(env.img_dir, env.vd_name)
@@ -22,17 +27,17 @@ env.indico_conf_dir = os.path.join(env.indico_inst_dir, env.indico_conf_dirname)
 env.ssl_certs_dir = os.path.join(env.ssl_dir, env.ssl_certs_dirname)
 env.ssl_private_dir = os.path.join(env.ssl_dir, env.ssl_private_dirname)
 
-def _update_params(host_name=env.host_name, host_port=env.host_port, config_dir=env.config_dir,
+def _update_params(host_name=env.host_name, host_port_fwd=env.host_port_fwd, config_dir=env.config_dir,
                    img_path=env.img_path, vd_path=env.vd_path, indico_inst_dir=env.indico_inst_dir,
-                   db_inst_dir=None, virtualization_cmd=env.virtualization_cmd, http_port=env.http_port,
-                   https_port=env.https_port):
+                   db_inst_dir=None, virtualization_cmd=env.virtualization_cmd, http_port_fwd=env.http_port_fwd,
+                   https_port_fwd=env.https_port_fwd, debug=env.debug):
     """
     Updates the parameters with the passed arguments
     """
 
     env.host_name = host_name
-    env.host_port = host_port
-    env.hosts[0] = "{0}@{1}:{2}".format(env.user_name, env.host_name, env.host_port)
+    env.host_port_fwd = host_port_fwd
+    env.hosts[0] = "{0}@{1}:{2}".format(env.user_name, env.host_name, env.host_port_fwd)
     env.config_dir = config_dir
     env.img_path = img_path
     env.vd_path = vd_path
@@ -43,8 +48,42 @@ def _update_params(host_name=env.host_name, host_port=env.host_port, config_dir=
     else:
         env.db_inst_dir = db_inst_dir
     env.virtualization_cmd = virtualization_cmd
-    env.http_port = http_port
-    env.https_port = https_port
+    env.http_port_fwd = http_port_fwd
+    env.https_port_fwd = https_port_fwd
+    if debug == 'True':
+        env.debug = True
+    else:
+        env.debug = False
+    env.ports = _get_ports()
+
+def _get_ports():
+    """
+    Return a list of ports, depending if the debug mode is on or off
+    """
+
+    if env.debug:
+        return [env.http_port_fwd, env.https_port_fwd]
+    else:
+        return [env.http_port, env.https_port]
+
+def _update_ports():
+    """
+    Enable port forwarding in case of debug or disable it otherwise
+    """
+
+    # Modifying the ports in indico.conf
+    sed(os.path.join(env.indico_conf_dir, 'indico.conf'), \
+        'BaseURL.*', \
+        "BaseURL              = \"http://{0}:{1}/indico\"" \
+        .format(env.host_name, env.ports[0]))
+    sed(os.path.join(env.indico_conf_dir, 'indico.conf'), \
+        'BaseSecureURL.*', \
+        "BaseSecureURL        = \"https://{0}:{1}/indico\"" \
+        .format(env.host_name, env.ports[1]))
+    sed(os.path.join(env.indico_conf_dir, 'indico.conf'), \
+        'LoginURL.*', \
+        "LoginURL             = \"https://{0}:{1}/indico/signIn.py\"" \
+        .format(env.host_name, env.ports[1]))
 
 def _putl(source_file, dest_dir):
     """
@@ -79,14 +118,14 @@ def indico_inst(indico_inst_dir=env.indico_inst_dir, db_inst_dir=None):
 
 @task
 def indico_config(host_name=env.host_name, config_dir=env.config_dir,
-                  indico_inst_dir=env.indico_inst_dir, http_port=env.http_port,
-                  https_port=env.https_port):
+                  indico_inst_dir=env.indico_inst_dir, http_port_fwd=env.http_port_fwd,
+                  https_port=env.https_port_fwd):
     """
     Configure Indico and the database
     """
 
     _update_params(host_name=host_name, config_dir=config_dir, indico_inst_dir=indico_inst_dir, \
-                   http_port=http_port, https_port=https_port)
+                   http_port_fwd=http_port_fwd, https_port_fwd=https_port_fwd)
 
     # Moving and modifying the Indico Apache .conf file
     _putl(os.path.join(env.config_dir, 'indico.conf'), env.httpd_confd_dir)
@@ -132,12 +171,12 @@ def vm_config(host_name=env.host_name, config_dir=env.config_dir,
                  env.host_name))
 
     # Adding the ports 80 and 443 to the iptables
-    run("sed \"11i\\-A INPUT -m state --state NEW -m tcp -p tcp --dport 80 -j ACCEPT\" {0} > {1}" \
-        .format(os.path.join(env.iptables_dir, 'iptables'), os.path.join(env.iptables_dir, 'temp')))
+    run("sed \"11i\\-A INPUT -m state --state NEW -m tcp -p tcp --dport {0} -j ACCEPT\" {1} > {2}" \
+        .format(env.http_port, os.path.join(env.iptables_dir, 'iptables'), os.path.join(env.iptables_dir, 'temp')))
     run("mv -f {0} {1}"\
         .format(os.path.join(env.iptables_dir, 'temp'), os.path.join(env.iptables_dir, 'iptables')))
-    run("sed \"12i\\-A INPUT -m state --state NEW -m tcp -p tcp --dport 443 -j ACCEPT\" {0} > {1}" \
-        .format(os.path.join(env.iptables_dir, 'iptables'), os.path.join(env.iptables_dir, 'temp')))
+    run("sed \"12i\\-A INPUT -m state --state NEW -m tcp -p tcp --dport {0} -j ACCEPT\" {1} > {2}" \
+        .format(env.https_port, os.path.join(env.iptables_dir, 'iptables'), os.path.join(env.iptables_dir, 'temp')))
     run("mv -f {0} {1}"\
         .format(os.path.join(env.iptables_dir, 'temp'), os.path.join(env.iptables_dir, 'iptables')))
     run('service iptables restart')
@@ -164,25 +203,25 @@ def vm_config(host_name=env.host_name, config_dir=env.config_dir,
 
 @task
 def config(host_name=env.host_name, config_dir=env.config_dir, indico_inst_dir=env.indico_inst_dir,
-           db_inst_dir=env.db_inst_dir, http_port=env.http_port, https_port=env.https_port):
+           db_inst_dir=env.db_inst_dir, http_port_fwd=env.http_port_fwd, https_port_fwd=env.https_port_fwd):
     """
     Configure Indico and various aspects of the VM
     """
 
-    indico_config(host_name, config_dir, indico_inst_dir, http_port, https_port)
+    indico_config(host_name, config_dir, indico_inst_dir, http_port_fwd, https_port_fwd)
     vm_config(host_name, config_dir, indico_inst_dir, db_inst_dir)
 
 @task
 def deploy(host_name=env.host_name, config_dir=env.config_dir, 
            indico_inst_dir=env.indico_inst_dir, db_inst_dir=None,
-           http_port=env.http_port, https_port=env.https_port):
+           http_port_fwd=env.http_port_fwd, https_port_fwd=env.https_port_fwd):
     """
     Deploy Indico into the VM
     """
 
     dependencies_inst()
     indico_inst(indico_inst_dir, db_inst_dir)
-    config(host_name, config_dir, indico_inst_dir, db_inst_dir, http_port, https_port)
+    config(host_name, config_dir, indico_inst_dir, db_inst_dir, http_port_fwd, https_port_fwd)
 
 @task
 def start_db(indico_inst_dir=env.indico_inst_dir):
@@ -212,27 +251,35 @@ def start(indico_inst_dir=env.indico_inst_dir):
     start_httpd()
 
 @task
-def run_vm(host_port=env.host_port, img_path=env.img_path,
+def run_vm(host_port_fwd=env.host_port_fwd, img_path=env.img_path,
            vd_path=env.vd_path, virtualization_cmd=env.virtualization_cmd,
-           http_port=env.http_port, https_port=env.https_port):
+           http_port_fwd=env.http_port_fwd, https_port_fwd=env.https_port_fwd, debug=env.debug):
     """
     Run the Virtual Machine
     """
 
-    _update_params(host_port=host_port, img_path=img_path, \
+    _update_params(host_port_fwd=host_port_fwd, img_path=img_path, \
                    vd_path=vd_path, virtualization_cmd=virtualization_cmd, \
-                   http_port=http_port, https_port=https_port)
+                   http_port_fwd=http_port_fwd, https_port_fwd=https_port_fwd, debug=debug)
 
     local("echo \"\" > {0}".format(env.qemu_log))
-    local("{0} -m 256 -redir tcp:{1}::22 -redir tcp:{2}::80 -redir tcp:{3}::443 \
-          -net nic -net user, -drive file={4},if=virtio -drive file={5},if=virtio \
-          -serial file:{6} -daemonize" \
-          .format(env.virtualization_cmd, env.host_port, env.http_port, \
-                  env.https_port, env.img_path, env.vd_path, env.qemu_log))
+
+    if env.debug:
+        redir = "-redir tcp:{0}::{1} -redir tcp:{2}::{3}" \
+                .format(env.http_port_fwd, env.http_port, env.https_port_fwd, env.https_port)
+    else:
+        redir = ""
+
+    local("{0} -m 256 -net nic -net user, -drive file={1},if=virtio -drive file={2},if=virtio \
+          -serial file:{3} -daemonize -redir tcp:{4}::{5} {6}" \
+          .format(env.virtualization_cmd, env.img_path, env.vd_path, env.qemu_log, env.host_port_fwd, env.host_port, redir))
+
     print("Booting up VM...")
     local("while ! grep -q \"Starting atd:.*[.*OK.*]\" \"{0}\"; do sleep 5; done" \
           .format(env.qemu_log))
     print("VM running!")
+
+    _update_ports()
 
 @task
 def config_cloud_init(config_dir=env.config_dir, vd_path=env.vd_path):
@@ -249,26 +296,26 @@ def config_cloud_init(config_dir=env.config_dir, vd_path=env.vd_path):
                   os.path.join(env.config_dir, 'meta-data')))
 
 @task
-def launch(host_port=env.host_port, img_path=env.img_path, vd_path=env.vd_path,
+def launch(host_port_fwd=env.host_port_fwd, img_path=env.img_path, vd_path=env.vd_path,
            indico_inst_dir=env.indico_inst_dir, virtualization_cmd=env.virtualization_cmd,
-           http_port=env.http_port, https_port=env.https_port):
+           http_port_fwd=env.http_port_fwd, https_port_fwd=env.https_port_fwd, debug=env.debug):
     """
     Run the VM and start Indico
     """
 
-    run_vm(host_port, img_path, vd_path, virtualization_cmd, http_port, https_port)
+    run_vm(host_port_fwd, img_path, vd_path, virtualization_cmd, http_port_fwd, https_port_fwd, debug)
     start(indico_inst_dir)
 
 @task
-def set_up_vm(host_name=env.host_name, host_port=env.host_port, config_dir=env.config_dir,
+def set_up_vm(host_name=env.host_name, host_port_fwd=env.host_port_fwd, config_dir=env.config_dir,
               img_path=env.img_path, vd_path=env.vd_path, indico_inst_dir=env.indico_inst_dir,
-              db_inst_dir=None, virtualization_cmd=env.virtualization_cmd, http_port=env.http_port,
-              https_port=env.https_port):
+              db_inst_dir=None, virtualization_cmd=env.virtualization_cmd, http_port_fwd=env.http_port_fwd,
+              https_port_fwd=env.https_port_fwd, debug=env.debug):
     """
     Install and run Indico
     """
 
     config_cloud_init(config_dir, vd_path)
-    run_vm(host_port, img_path, vd_path, virtualization_cmd, http_port, https_port)
-    deploy(host_name, config_dir, indico_inst_dir, db_inst_dir, http_port, https_port)
+    run_vm(host_port_fwd, img_path, vd_path, virtualization_cmd, http_port_fwd, https_port_fwd, debug)
+    deploy(host_name, config_dir, indico_inst_dir, db_inst_dir, http_port_fwd, https_port_fwd)
     start(indico_inst_dir)
