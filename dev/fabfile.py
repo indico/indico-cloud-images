@@ -3,6 +3,8 @@ from fabric.contrib.files import sed
 from fabric.operations import put, run
 from fabric.main import load_settings
 import os
+import string
+import random
 
 env.conf = 'fabfile.conf'
 
@@ -37,7 +39,7 @@ def _update_params(host_name=env.host_name, host_port_fwd=env.host_port_fwd, con
 
     env.host_name = host_name
     env.host_port_fwd = host_port_fwd
-    env.hosts[0] = "{0}@{1}:{2}".format(env.user_name, env.host_name, env.host_port_fwd)
+    env.hosts = ["{0}@{1}:{2}".format(env.user_name, env.host_name, env.host_port_fwd)]
     env.config_dir = config_dir
     env.img_path = img_path
     env.vd_path = vd_path
@@ -73,15 +75,15 @@ def _update_ports():
 
     # Modifying the ports in indico.conf
     sed(os.path.join(env.indico_conf_dir, 'indico.conf'), \
-        'BaseURL.*', \
+        '^(#)? *BaseURL.*', \
         "BaseURL              = \"http://{0}:{1}/indico\"" \
         .format(env.host_name, env.ports[0]))
     sed(os.path.join(env.indico_conf_dir, 'indico.conf'), \
-        'BaseSecureURL.*', \
+        '^(#)? *BaseSecureURL.*', \
         "BaseSecureURL        = \"https://{0}:{1}/indico\"" \
         .format(env.host_name, env.ports[1]))
     sed(os.path.join(env.indico_conf_dir, 'indico.conf'), \
-        'LoginURL.*', \
+        '^(#)? *LoginURL.*', \
         "LoginURL             = \"https://{0}:{1}/indico/signIn.py\"" \
         .format(env.host_name, env.ports[1]))
 
@@ -93,15 +95,27 @@ def _putl(source_file, dest_dir):
     put(source_file, '/')
     run("mv -f /{0} {1}".format(os.path.basename(source_file), dest_dir))
 
+def _get_random_number():
+    n = int(''.join(random.choice(string.digits) for x in range(2)))+1
+    return n
+
+def _gen_random_pswd():
+    n = _get_random_number()
+    pswd = ''.join(random.choice(string.ascii_uppercase + string.ascii_lowercase + string.digits) for x in range(n))
+    return pswd
+
 @task
 def dependencies_inst():
     """
     Dependencies installation
     """
 
-    run('yum -y install python-devel.x86_64 gcc.x86_64 httpd.x86_64 mod_wsgi.x86_64 \
-        python-reportlab.x86_64 python-imaging.x86_64 python-lxml.x86_64 mod_ssl.x86_64')
-    run('easy_install ZODB3==3.10.5 zc.queue==1.3')
+    run('wget http://springdale.princeton.edu/data/puias/6.4/x86_64/os/RPM-GPG-KEY-puias')
+    run('mv RPM-GPG-KEY-puias /etc/pki/rpm-gpg/RPM-GPG-KEY-puias')
+    _putl(os.path.join(env.config_dir, 'puias.repo'), '/etc/yum.repos.d')
+    run('yum -y install python-devel.x86_64 gcc.x86_64 httpd.x86_64 mod_wsgi.x86_64' + \
+        ' python-reportlab.x86_64 python-imaging.x86_64 python-lxml.x86_64 mod_ssl.x86_64 redis.x86_64')
+    run('easy_install ZODB3==3.10.5 zc.queue==1.3 hiredis redis')
 
 @task
 def indico_inst(indico_inst_dir=env.indico_inst_dir, db_inst_dir=None):
@@ -119,7 +133,7 @@ def indico_inst(indico_inst_dir=env.indico_inst_dir, db_inst_dir=None):
 @task
 def indico_config(host_name=env.host_name, config_dir=env.config_dir,
                   indico_inst_dir=env.indico_inst_dir, http_port_fwd=env.http_port_fwd,
-                  https_port=env.https_port_fwd):
+                  https_port_fwd=env.https_port_fwd):
     """
     Configure Indico and the database
     """
@@ -135,22 +149,11 @@ def indico_config(host_name=env.host_name, config_dir=env.config_dir,
 
     # Adding a ServerName in httpd.conf
     sed(os.path.join(env.httpd_conf_dir, 'httpd.conf'), \
-        '#ServerName www.example.com:80', \
+        '#ServerName.*', \
         "ServerName {0}".format(env.host_name))
 
     # Adding the corresponding ports to indico.conf
-    sed(os.path.join(env.indico_conf_dir, 'indico.conf'), \
-        'BaseURL              = \"http://localhost/indico\"', \
-        "BaseURL              = \"http://{0}:{1}/indico\"" \
-        .format(env.host_name, env.http_port))
-    sed(os.path.join(env.indico_conf_dir, 'indico.conf'), \
-        'BaseSecureURL        = \"https://localhost/indico\"', \
-        "BaseSecureURL        = \"https://{0}:{1}/indico\"" \
-        .format(env.host_name, env.https_port))
-    sed(os.path.join(env.indico_conf_dir, 'indico.conf'), \
-        '#   LoginURL             = \"\"', \
-        "LoginURL             = \"https://{0}:{1}/indico/signIn.py\"" \
-        .format(env.host_name, env.https_port))
+    _update_ports()
 
 @task
 def vm_config(host_name=env.host_name, config_dir=env.config_dir,
@@ -201,6 +204,17 @@ def vm_config(host_name=env.host_name, config_dir=env.config_dir,
     run("restorecon -Rv {0}".format(env.db_inst_dir))
     run('setsebool -P httpd_can_network_connect 1')
 
+    # Configure Redis
+    pswd = _gen_random_pswd()
+    _putl(os.path.join(env.config_dir, 'redis.conf'), '/etc')
+    sed('/etc/redis.conf', '^(#)? *requirepass.*', "requirepass {0}".format(pswd))
+    sed('/etc/redis.conf', '^(#)? *port.*', "port {0}".format(env.redis_port))
+    sed(os.path.join(env.indico_conf_dir, 'indico.conf'), '^(#)? *RedisConnectionURL.*', \
+        "RedisConnectionURL = \"redis://unused:{0}@{1}:{2}/0\"".format(pswd, env.host_name, env.redis_port))
+    sed(os.path.join(env.indico_conf_dir, 'indico.conf'), '^(#)? *RedisCacheURL.*', \
+        "RedisCacheURL = \"redis://unused:{0}@{1}:{2}/1\"".format(pswd, env.host_name, env.redis_port))
+
+
 @task
 def config(host_name=env.host_name, config_dir=env.config_dir, indico_inst_dir=env.indico_inst_dir,
            db_inst_dir=env.db_inst_dir, http_port_fwd=env.http_port_fwd, https_port_fwd=env.https_port_fwd):
@@ -234,6 +248,14 @@ def start_db(indico_inst_dir=env.indico_inst_dir):
     run("zdaemon -C {0} start".format(os.path.join(env.indico_conf_dir, 'zdctl.conf')))
 
 @task
+def start_redis():
+    """
+    Start the Redis server
+    """
+
+    run('service redis start')
+
+@task
 def start_httpd():
     """
     Start Apache
@@ -242,12 +264,17 @@ def start_httpd():
     run('service httpd start')
 
 @task
-def start(indico_inst_dir=env.indico_inst_dir):
+def start(indico_inst_dir=env.indico_inst_dir, debug=env.debug):
     """
     Start Indico
     """
 
+    _update_params(debug=debug)
+
+    _update_ports()
+
     start_db(indico_inst_dir)
+    start_redis()
     start_httpd()
 
 @task
@@ -265,21 +292,19 @@ def run_vm(host_port_fwd=env.host_port_fwd, img_path=env.img_path,
     local("echo \"\" > {0}".format(env.qemu_log))
 
     if env.debug:
-        redir = "-redir tcp:{0}::{1} -redir tcp:{2}::{3}" \
+        redir = " -redir tcp:{0}::{1} -redir tcp:{2}::{3}" \
                 .format(env.http_port_fwd, env.http_port, env.https_port_fwd, env.https_port)
     else:
         redir = ""
 
-    local("{0} -m 256 -net nic -net user, -drive file={1},if=virtio -drive file={2},if=virtio \
-          -serial file:{3} -daemonize -redir tcp:{4}::{5} {6}" \
+    local(("{0} -m 256 -redir tcp:{4}::{5}{6} -net nic -net user, -drive file={1}" + \
+          ",if=virtio -drive file={2},if=virtio -serial file:{3} -daemonize") \
           .format(env.virtualization_cmd, env.img_path, env.vd_path, env.qemu_log, env.host_port_fwd, env.host_port, redir))
 
     print("Booting up VM...")
     local("while ! grep -q \"Starting atd:.*[.*OK.*]\" \"{0}\"; do sleep 5; done" \
           .format(env.qemu_log))
     print("VM running!")
-
-    _update_ports()
 
 @task
 def config_cloud_init(config_dir=env.config_dir, vd_path=env.vd_path):
@@ -289,11 +314,21 @@ def config_cloud_init(config_dir=env.config_dir, vd_path=env.vd_path):
 
     _update_params(config_dir=config_dir, vd_path=vd_path)
 
-    local("sed -i \'s|password:.*|password: {0}|g\' {1}" \
+    local("sed -i \'s|^password:.*|password: {0}|g\' {1}" \
           .format(env.password, os.path.join(env.config_dir, 'user-data')))
     local("mkisofs -output {0} -volid cidata -joliet -rock {1} {2}" \
           .format(env.vd_path, os.path.join(env.config_dir, 'user-data'), \
                   os.path.join(env.config_dir, 'meta-data')))
+
+@task
+def update_debug(debug=env.debug):
+    """
+    Update the VM configuration regarding the debug mode
+    """
+
+    _update_params(debug=debug)
+
+    _update_ports()
 
 @task
 def launch(host_port_fwd=env.host_port_fwd, img_path=env.img_path, vd_path=env.vd_path,
@@ -304,7 +339,7 @@ def launch(host_port_fwd=env.host_port_fwd, img_path=env.img_path, vd_path=env.v
     """
 
     run_vm(host_port_fwd, img_path, vd_path, virtualization_cmd, http_port_fwd, https_port_fwd, debug)
-    start(indico_inst_dir)
+    start(indico_inst_dir, debug)
 
 @task
 def set_up_vm(host_name=env.host_name, host_port_fwd=env.host_port_fwd, config_dir=env.config_dir,
@@ -318,4 +353,4 @@ def set_up_vm(host_name=env.host_name, host_port_fwd=env.host_port_fwd, config_d
     config_cloud_init(config_dir, vd_path)
     run_vm(host_port_fwd, img_path, vd_path, virtualization_cmd, http_port_fwd, https_port_fwd, debug)
     deploy(host_name, config_dir, indico_inst_dir, db_inst_dir, http_port_fwd, https_port_fwd)
-    start(indico_inst_dir)
+    start(indico_inst_dir, debug)

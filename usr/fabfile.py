@@ -20,7 +20,8 @@ env.ssl_certs_dir = os.path.join(env.ssl_dir, env.ssl_certs_dirname)
 env.ssl_private_dir = os.path.join(env.ssl_dir, env.ssl_private_dirname)
 
 def _update_params(host_name=env.host_name, http_port=env.http_port, https_port=env.https_port,
-                   ssl_pem_path=env.ssl_pem_path, ssl_key_path=env.ssl_key_path):
+                   ssl_pem_path=env.ssl_pem_path, ssl_key_path=env.ssl_key_path,
+                   redis_pswd=env.redis_pswd, redis_port=env.redis_port):
     """
     Updates the parameters with the passed arguments
     """
@@ -30,6 +31,8 @@ def _update_params(host_name=env.host_name, http_port=env.http_port, https_port=
     env.https_port = https_port
     env.ssl_pem_path = ssl_pem_path
     env.ssl_key_path = ssl_key_path
+    env.redis_pswd = redis_pswd
+    env.redis_port = redis_port
 
 def _putl(source_file, dest_dir):
     """
@@ -41,7 +44,8 @@ def _putl(source_file, dest_dir):
 
 @task
 def config(host_name=env.host_name, http_port=env.http_port, https_port=env.https_port,
-           ssl_pem_path=env.ssl_pem_path, ssl_key_path=env.ssl_key_path):
+           ssl_pem_path=env.ssl_pem_path, ssl_key_path=env.ssl_key_path,
+           redis_pswd=env.redis_pswd, redis_port=env.redis_port):
     """
     Configure the VM with all the necessary information
     """
@@ -50,6 +54,8 @@ def config(host_name=env.host_name, http_port=env.http_port, https_port=env.http
     update_host_name(host_name)
     update_http_port(http_port)
     update_https_port(https_port)
+    update_redis_pswd(redis_pswd)
+    update_https_port(redis_port)
 
 @task
 def load_ssl(ssl_pem_path=env.ssl_pem_path, ssl_key_path=env.ssl_key_path):
@@ -81,19 +87,19 @@ def update_host_name(host_name = env.host_name):
 
     # Replacing the ServerName in httpd.conf
     sed(os.path.join(env.httpd_conf_dir, 'httpd.conf'), \
-        '#ServerName.*', "ServerName {0}".format(env.host_name))
+        '^ServerName.*', "ServerName {0}".format(env.host_name))
 
     # Modifying the hostname in indico.conf
     sed(os.path.join(env.indico_conf_dir, 'indico.conf'), \
-        'BaseURL.*', \
+        '^BaseURL.*', \
         "BaseURL              = \"http://{0}:{1}/indico\"" \
         .format(env.host_name, env.http_port))
     sed(os.path.join(env.indico_conf_dir, 'indico.conf'), \
-        'BaseSecureURL.*', \
+        '^BaseSecureURL.*', \
         "BaseSecureURL        = \"https://{0}:{1}/indico\"" \
         .format(env.host_name, env.https_port))
     sed(os.path.join(env.indico_conf_dir, 'indico.conf'), \
-        'LoginURL.*', \
+        '^LoginURL.*', \
         "LoginURL             = \"https://{0}:{1}/indico/signIn.py\"" \
         .format(env.host_name, env.https_port))
 
@@ -107,7 +113,7 @@ def update_http_port(http_port=env.http_port):
 
     # Modifying the http port in indico.conf
     sed(os.path.join(env.indico_conf_dir, 'indico.conf'), \
-        'BaseURL.*', \
+        '^BaseURL.*', \
         "BaseURL              = \"http://{0}:{1}/indico\"" \
         .format(env.host_name, env.http_port))
     run("sed -i.bak -r -e \"11s|.*|-A INPUT -m state --state NEW -m tcp -p tcp --dport {0} -j ACCEPT|g\" {1}" \
@@ -123,12 +129,39 @@ def update_https_port(https_port=env.https_port):
 
     # Modifying the https port in indico.conf
     sed(os.path.join(env.indico_conf_dir, 'indico.conf'), \
-        'BaseSecureURL.*', \
+        '^BaseSecureURL.*', \
         "BaseSecureURL        = \"https://{0}:{1}/indico\"" \
         .format(env.host_name, env.https_port))
     sed(os.path.join(env.indico_conf_dir, 'indico.conf'), \
-        'LoginURL.*', \
+        '^LoginURL.*', \
         "LoginURL             = \"https://{0}:{1}/indico/signIn.py\"" \
         .format(env.host_name, env.https_port))
     run("sed -i.bak -r -e \"12s|.*|-A INPUT -m state --state NEW -m tcp -p tcp --dport {0} -j ACCEPT|g\" {1}" \
         .format(env.https_port, os.path.join(env.iptables_dir, 'iptables')))
+
+@task
+def update_redis_pswd(redis_pswd=env.redis_pswd):
+    """
+    Change the Redis password
+    """
+
+    _update_params(redis_pswd=redis_pswd)
+
+    sed('/etc/redis.conf', '^(#)? *requirepass.*', "requirepass {0}".format(env.redis_pswd))
+    sed(os.path.join(env.indico_conf_dir, 'indico.conf'), '^(#)? *RedisConnectionURL.*', \
+        "RedisConnectionURL = \"redis://unused:{0}@{1}:{2}/0\"".format(env.redis_pswd, env.host_name, env.redis_port))
+    sed(os.path.join(env.indico_conf_dir, 'indico.conf'), '^(#)? *RedisCacheURL.*', \
+        "RedisCacheURL = \"redis://unused:{0}@{1}:{2}/1\"".format(env.redis_pswd, env.host_name, env.redis_port))
+
+def update_redis_port(redis_port=env.redis_port):
+    """
+    Change the Redis port
+    """
+
+    _update_params(redis_port=redis_port)
+
+    sed('/etc/redis.conf', '^(#)? *port.*', "port {0}".format(env.redis_port))
+    sed(os.path.join(env.indico_conf_dir, 'indico.conf'), '^(#)? *RedisConnectionURL.*', \
+        "RedisConnectionURL = \"redis://unused:{0}@{1}:{2}/0\"".format(env.redis_pswd, env.host_name, env.redis_port))
+    sed(os.path.join(env.indico_conf_dir, 'indico.conf'), '^(#)? *RedisCacheURL.*', \
+        "RedisCacheURL = \"redis://unused:{0}@{1}:{2}/1\"".format(env.redis_pswd, env.host_name, env.redis_port))
