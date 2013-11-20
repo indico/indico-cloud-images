@@ -13,12 +13,20 @@ if not settings:
     raise RuntimeError("Configuration file {0} is needed!".format(env.conf))
 env.update(settings)
 
-if env.debug == 'True':
-    env.ports = [env.http_port_fwd, env.https_port_fwd]
+if env.debug:
+    env.ports = [':'+env.http_port_fwd, ':'+env.https_port_fwd]
 else:
-    env.ports = [env.http_port, env.https_port]
+    if env.http_port is '80':
+        http = ''
+    else:
+        http = ':'+env.http_port
+    if env.https_port is '443':
+        https = ''
+    else:
+        https = ':'+env.http_port
+    env.ports = [http, https]
 
-env.hosts = ["{0}@{1}:{2}".format(env.user_name, env.host_name, env.host_port_fwd)]
+env.hosts = [env.host_name]
 
 env.img_path = os.path.join(env.img_dir, env.img_name)
 env.vd_path = os.path.join(env.img_dir, env.vd_name)
@@ -39,7 +47,7 @@ def _update_params(host_name=env.host_name, host_port_fwd=env.host_port_fwd, con
 
     env.host_name = host_name
     env.host_port_fwd = host_port_fwd
-    env.hosts = ["{0}@{1}:{2}".format(env.user_name, env.host_name, env.host_port_fwd)]
+    env.hosts[0] = env.host_name
     env.config_dir = config_dir
     env.img_path = img_path
     env.vd_path = vd_path
@@ -64,9 +72,17 @@ def _get_ports():
     """
 
     if env.debug:
-        return [env.http_port_fwd, env.https_port_fwd]
+        return [':'+env.http_port_fwd, ':'+env.https_port_fwd]
     else:
-        return [env.http_port, env.https_port]
+        if env.http_port is '80':
+            http = ''
+        else:
+            http = ':'+env.http_port
+        if env.https_port is '443':
+            https = ''
+        else:
+            https = ':'+env.http_port
+        return [http, https]
 
 def _update_ports():
     """
@@ -76,15 +92,15 @@ def _update_ports():
     # Modifying the ports in indico.conf
     sed(os.path.join(env.indico_conf_dir, 'indico.conf'), \
         '^(#)? *BaseURL.*', \
-        "BaseURL              = \"http://{0}:{1}/indico\"" \
+        "BaseURL              = \"http://{0}{1}/indico\"" \
         .format(env.host_name, env.ports[0]))
     sed(os.path.join(env.indico_conf_dir, 'indico.conf'), \
         '^(#)? *BaseSecureURL.*', \
-        "BaseSecureURL        = \"https://{0}:{1}/indico\"" \
+        "BaseSecureURL        = \"https://{0}{1}/indico\"" \
         .format(env.host_name, env.ports[1]))
     sed(os.path.join(env.indico_conf_dir, 'indico.conf'), \
         '^(#)? *LoginURL.*', \
-        "LoginURL             = \"https://{0}:{1}/indico/signIn.py\"" \
+        "LoginURL             = \"https://{0}{1}/indico/signIn.py\"" \
         .format(env.host_name, env.ports[1]))
 
 def _putl(source_file, dest_dir):
@@ -146,6 +162,11 @@ def indico_config(host_name=env.host_name, config_dir=env.config_dir,
     sed(os.path.join(env.httpd_confd_dir, 'indico.conf'), '/opt/indico', env.indico_inst_dir)
     sed(os.path.join(env.httpd_confd_dir, 'indico.conf'), '/etc/ssl/certs', env.ssl_certs_dir)
     sed(os.path.join(env.httpd_confd_dir, 'indico.conf'), '/etc/ssl/private', env.ssl_private_dir)
+    run("sed -i.bak -r -e \"5s|.*|<VirtualHost *:{0}>|g\" {1}" \
+        .format(env.http_port, os.path.join(env.httpd_confd_dir, 'indico.conf')))
+    run("sed -i.bak -r -e \"30s|.*|<VirtualHost *:{0}>|g\" {1}" \
+        .format(env.https_port, os.path.join(env.httpd_confd_dir, 'indico.conf')))
+
 
     # Adding a ServerName in httpd.conf
     sed(os.path.join(env.httpd_conf_dir, 'httpd.conf'), \
@@ -354,3 +375,17 @@ def set_up_vm(host_name=env.host_name, host_port_fwd=env.host_port_fwd, config_d
     run_vm(host_port_fwd, img_path, vd_path, virtualization_cmd, http_port_fwd, https_port_fwd, debug)
     deploy(host_name, config_dir, indico_inst_dir, db_inst_dir, http_port_fwd, https_port_fwd)
     start(indico_inst_dir, debug)
+
+@task
+def create_img(host_name=env.host_name, host_port_fwd=env.host_port_fwd, config_dir=env.config_dir,
+               img_path=env.img_path, vd_path=env.vd_path, indico_inst_dir=env.indico_inst_dir,
+               db_inst_dir=None, virtualization_cmd=env.virtualization_cmd):
+    """
+    Creates a Virtual Image ready to be deployed on the cloud
+    """
+
+    config_cloud_init(config_dir, vd_path)
+    run_vm(host_port_fwd=host_port_fwd, img_path=img_path, vd_path=vd_path,
+           virtualization_cmd=virtualization_cmd, debug='False')
+    deploy(host_name=host_name, config_dir=config_dir, indico_inst_dir=indico_inst_dir, db_inst_dir=db_inst_dir)
+    local("sudo virt-sysprep -a {0}".format(img_path))
