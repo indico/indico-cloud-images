@@ -1,6 +1,7 @@
 from fabric.api import *
 from fabric.contrib.files import sed
 from fabric.operations import put, run
+from fabric.context_managers import settings
 import os
 import uuid
 
@@ -211,20 +212,18 @@ def deploy(host_name=env.guest_machine['name'], config_dir=env.config_dir,
 
 
 @task
-def start(debug=env.debug_vm):
+def start():
     """
     Start Indico
     """
 
-    _update_params(debug_vm=debug)
+    _update_params()
 
     run("zdaemon -C {0} start".format(os.path.join(env.indico_conf_dir, 'zdctl.conf')))
     run('service redis start')
     run('service httpd start')
 
-
-@task
-def run_vm(**params):
+def launch_vm(**params):
     """
     Run the Virtual Machine
     """
@@ -250,10 +249,9 @@ def run_vm(**params):
     print("VM running!")
 
 
-@task
-def config_cloud_init(config_dir=env.config_dir, vd_path=env.vd_path):
+def config_no_cloud(config_dir=env.config_dir, vd_path=env.vd_path):
     """
-    Configure Cloud-Init files
+    cloud-init no-cloud fake config
     """
 
     _update_params(config_dir=config_dir, vd_path=vd_path)
@@ -264,44 +262,36 @@ def config_cloud_init(config_dir=env.config_dir, vd_path=env.vd_path):
           .format(env.vd_path, os.path.join(env.config_dir, 'user-data'),
                   os.path.join(env.config_dir, 'meta-data')))
 
+@task
+def cleanup_vm():
+    with settings(warn_only=True):
+        run('rm /etc/udev/rules.d/70-persistent-net.rules')
+        run('rm /lib/udev/write_net_rules')
+    run('shutdown -h now')
 
 @task
-def launch(host_port_fwd=env.host_machine['ssh_port'], img_path=env.img_path, vd_path=env.vd_path,
-           indico_inst_dir=env.indico_inst_dir, virtualization_cmd=env.virtualization_cmd,
-           http_port_fwd=env.host_machine['http_port'], https_port_fwd=env.host_machine['https_port'], debug=env.debug_vm):
+def run_vm(host_port_fwd=env.host_machine['ssh_port'], img_path=env.img_path, vd_path=env.vd_path,
+              indico_inst_dir=env.indico_inst_dir, virtualization_cmd=env.virtualization_cmd,
+              http_port_fwd=env.host_machine['http_port'], https_port_fwd=env.host_machine['https_port']):
     """
-    Run the VM and start Indico
+    Run the VM and start Indico (Debugging purposes)
     """
-
-    run_vm(host_port_fwd, img_path, vd_path, virtualization_cmd, http_port_fwd, https_port_fwd, debug)
-    start(indico_inst_dir, debug)
-
-
-@task
-def set_up_vm(host_name=env.guest_machine['name'], host_port_fwd=env.host_machine['ssh_port'], config_dir=env.config_dir,
-              img_path=env.img_path, vd_path=env.vd_path, indico_inst_dir=env.indico_inst_dir,
-              db_inst_dir=None, virtualization_cmd=env.virtualization_cmd, http_port_fwd=env.host_machine['http_port'],
-              https_port_fwd=env.host_machine['https_port'], debug=env.debug_vm):
-    """
-    Install and run Indico
-    """
-
-    config_cloud_init(config_dir, vd_path)
-    run_vm(host_port_fwd, img_path, vd_path, virtualization_cmd, http_port_fwd, https_port_fwd, debug)
-    deploy(host_name, config_dir, indico_inst_dir, db_inst_dir, http_port_fwd, https_port_fwd)
-    start(indico_inst_dir, debug)
+    env.debug_vm = True
+    launch_vm(host_port_fwd=host_port_fwd, img_path=img_path, vd_path=vd_path, virtualization_cmd=virtualization_cmd,
+              http_port_fwd=http_port_fwd, https_port_fwd=https_port_fwd)
+    start()
 
 
 @task
-def create_img(host_name=env.guest_machine['name'], host_port_fwd=env.host_machine['ssh_port'], config_dir=env.config_dir,
-               img_path=env.img_path, vd_path=env.vd_path, indico_inst_dir=env.indico_inst_dir,
-               db_inst_dir=None, virtualization_cmd=env.virtualization_cmd):
+def create_vm_img(host_name=env.guest_machine['name'], host_port_fwd=env.host_machine['ssh_port'], config_dir=env.config_dir,
+                  img_path=env.img_path, vd_path=env.vd_path, indico_inst_dir=env.indico_inst_dir,
+                  db_inst_dir=None, virtualization_cmd=env.virtualization_cmd):
     """
     Creates a Virtual Image ready to be deployed on the cloud
     """
 
-    config_cloud_init(config_dir, vd_path)
-    run_vm(host_port_fwd=host_port_fwd, img_path=img_path, vd_path=vd_path,
-           virtualization_cmd=virtualization_cmd, debug='False')
+    config_no_cloud(config_dir, vd_path)
+    launch_vm(host_port_fwd=host_port_fwd, img_path=img_path, vd_path=vd_path,
+              virtualization_cmd=virtualization_cmd, debug=False)
     deploy(host_name=host_name, config_dir=config_dir, indico_inst_dir=indico_inst_dir, db_inst_dir=db_inst_dir)
-    local("sudo virt-sysprep -a {0}".format(img_path))
+    cleanup_vm()
