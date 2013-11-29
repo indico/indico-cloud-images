@@ -1,9 +1,0 @@
-#cloud-config
-
-yum_repos:
-    name=puias-unsupported:
-        baseurl: http://puias.princeton.edu/data/puias/unsupported/$releasever/$basearch/
-        gpgcheck: 1
-        gpgkey: file:///etc/pki/rpm-gpg/RPM-GPG-KEY-puias
-        name: PUIAS Unsupported $releasever
-	priority: 19
