@@ -223,6 +223,7 @@ def start():
     run('service redis start')
     run('service httpd start')
 
+@task
 def launch_vm(**params):
     """
     Run the Virtual Machine
@@ -270,15 +271,16 @@ def cleanup_vm():
     run('shutdown -h now')
 
 @task
-def run_vm(host_port_fwd=env.host_machine['ssh_port'], img_path=env.img_path, vd_path=env.vd_path,
+def run_vm(host_port_fwd=env.host_machine['ssh_port'], img_name=env.img_name, vd_name=env.vd_name,
               indico_inst_dir=env.indico_inst_dir, virtualization_cmd=env.virtualization_cmd,
-              http_port_fwd=env.host_machine['http_port'], https_port_fwd=env.host_machine['https_port']):
+              http_port_fwd=env.host_machine['http_port'], https_port_fwd=env.host_machine['https_port'],
+              img_dir=env.img_dir):
     """
     Run the VM and start Indico (Debugging purposes)
     """
     env.debug_vm = True
-    launch_vm(host_port_fwd=host_port_fwd, img_path=img_path, vd_path=vd_path, virtualization_cmd=virtualization_cmd,
-              http_port_fwd=http_port_fwd, https_port_fwd=https_port_fwd)
+    launch_vm(host_port_fwd=host_port_fwd, img_name=img_name, vd_name=vd_name, virtualization_cmd=virtualization_cmd,
+              http_port_fwd=http_port_fwd, https_port_fwd=https_port_fwd, img_dir=img_dir)
     start()
 
 
