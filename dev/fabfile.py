@@ -31,8 +31,9 @@ YUM_DEPS = ['python-devel', 'gcc', 'httpd', 'mod_wsgi', 'python-reportlab',
             'python-imaging', 'python-lxml', 'mod_ssl', 'redis', 'openldap-devel']
 INDICO_EXTRA_DEPS = ['hiredis', 'python-ldap']
 
+env.conf = "fabfile.conf"
 
-execfile("fabfile.conf", {}, env)
+execfile(env.conf, {}, env)
 build_parameters()
 
 
@@ -243,7 +244,7 @@ def launch_vm(**params):
           .format(env.qemu_log))
     print("VM running!")
 
-
+@task
 def config_no_cloud(**params):
     """
     cloud-init no-cloud fake config
@@ -257,7 +258,6 @@ def config_no_cloud(**params):
           .format(env.vd_path, os.path.join(env.config_dir, 'user-data'),
                   os.path.join(env.config_dir, 'meta-data')))
 
-@task
 def cleanup_vm():
     with settings(warn_only=True):
         run('rm /etc/udev/rules.d/70-persistent-net.rules')
@@ -265,7 +265,7 @@ def cleanup_vm():
     run('shutdown -h now')
 
 @task
-def run_vm(**params):
+def run_vm_debug(**params):
     """
     Run the VM and start Indico (Debugging purposes)
     """

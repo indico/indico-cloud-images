@@ -24,36 +24,29 @@ easy_install hiredis python-ldap
 # Indico installation #
 # ------------------- #
 easy_install indico
-echo -e "# INDICO_INST_DIR #\nc\ny\n# DB_INST_DIR #" | indico_initial_setup
+echo -e "/opt/indico\nc\ny\n/opt/indico/db" | indico_initial_setup
 
 # -------------------- #
 # Indico configuration #
 # -------------------- #
-find_replace # HTTPD_CONF_DIR #/httpd.conf '#ServerName.*' "ServerName # HOST_NAME #"
+find_replace /etc/httpd/conf/httpd.conf '#ServerName.*' "ServerName indico-cloud-test2"
 
 # ----------------------------- #
 # Virtual Machine configuration #
 # ----------------------------- #
-mkdir -p # SSL_CERTS_DIR #
-mkdir -p # SSL_PRIVATE_DIR #
-if !# LOAD_SSL #; then
-    openssl openssl req -new -x509 -nodes -out "# SSL_PEM_PATH #" -keyout "# SSL_KEY_PATH #" -days 3650 -subj "/CN=# HOST_NAME #"
+mkdir -p /etc/ssl/certs
+mkdir -p /etc/ssl/private
+if !0; then
+    openssl openssl req -new -x509 -nodes -out "/etc/ssl/certs/self-gen.pem" -keyout "/etc/ssl/private/self-gen.key" -days 3650 -subj "/CN=indico-cloud-test2"
 fi
-add_line # IPTABLES_PATH # 11 "-A INPUT -m state --state NEW -m tcp -p tcp --dport # HTTP_PORT # -j ACCEPT"
-add_line # IPTABLES_PATH # 12 "-A INPUT -m state --state NEW -m tcp -p tcp --dport # HTTPS_PORT # -j ACCEPT"
+add_line /etc/sysconfig/iptables 11 "-A INPUT -m state --state NEW -m tcp -p tcp --dport 80 -j ACCEPT"
+add_line /etc/sysconfig/iptables 12 "-A INPUT -m state --state NEW -m tcp -p tcp --dport 443 -j ACCEPT"
 service iptables restart
 for idir in 'archive' 'cache' 'htdocs' 'log' 'tmp'
 do
-    semanage fcontext -a -t httpd_sys_content_t "# INDICO_INST_DIR #/$idir(/.*)?"
+    semanage fcontext -a -t httpd_sys_content_t "/opt/indico/$idir(/.*)?"
 done
-semanage fcontext -a -t httpd_sys_content_t "# DB_INST_DIR #(/.*)?"
-restorecon -Rv # INDICO_INST_DIR #
-restorecon -Rv # DB_INST_DIR #
+semanage fcontext -a -t httpd_sys_content_t "/opt/indico/db(/.*)?"
+restorecon -Rv /opt/indico
+restorecon -Rv /opt/indico/db
 setsebool -P httpd_can_network_connect 1
-
-# --------------- #
-# Starting Indico #
-# --------------- #
-zdaemon -C # INDICO_INST_DIR #/etc/zdctl.conf start
-service redis start
-service httpd start

@@ -5,8 +5,8 @@ import re
 
 def list_types():
     """
-		return a list of mime-types that are handled by this module
-		"""
+    Return a list of mime-types that are handled by this module
+    """
 
     return(["text/plain"])
 
@@ -35,13 +35,11 @@ def handle_part(data,ctype,filename,payload):
       d = os.path.dirname(dest_path)
       if (not os.path.exists(d)) & (d != ''):
         os.makedirs(d)
-      f = open(dest_path, 'w+')
 
-      for line in payload.splitlines():
-        if not re.search('#DestinationPath = (.+?)', line):
-          f.write(line)
-
-      f.close()
+      with open(dest_path, 'w+') as f:
+        for line in payload.splitlines():
+          if not re.search('#DestinationPath = (.+?)', line):
+            f.write(line)
 
     else:
       print "No DestinationPath found for the file %s" % filename
