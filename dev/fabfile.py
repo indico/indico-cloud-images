@@ -31,8 +31,9 @@ YUM_DEPS = ['python-devel', 'gcc', 'httpd', 'mod_wsgi', 'python-reportlab',
             'python-imaging', 'python-lxml', 'mod_ssl', 'redis', 'openldap-devel']
 INDICO_EXTRA_DEPS = ['hiredis', 'python-ldap']
 
+env.conf = "fabfile.conf"
 
-execfile("fabfile.conf", {}, env)
+execfile(env.conf, {}, env)
 build_parameters()
 
 
@@ -44,15 +45,15 @@ def _update_ports_debug():
     # Modifying the ports in indico.conf
     sed(os.path.join(env.indico_conf_dir, 'indico.conf'),
         '^(#)? *BaseURL.*',
-        "BaseURL              = \"http://{0}{1}/indico\""
+        "BaseURL = \"http://{0}{1}/indico\""
         .format(env.host_machine['name'], env.host_machine['http_port']))
     sed(os.path.join(env.indico_conf_dir, 'indico.conf'),
         '^(#)? *BaseSecureURL.*',
-        "BaseSecureURL        = \"https://{0}{1}/indico\""
+        "BaseSecureURL = \"https://{0}{1}/indico\""
         .format(env.host_machine['name'], env.host_machine['https_port']))
     sed(os.path.join(env.indico_conf_dir, 'indico.conf'),
         '^(#)? *LoginURL.*',
-        "LoginURL             = \"https://{0}{1}/indico/signIn.py\""
+        "LoginURL = \"https://{0}{1}/indico/signIn.py\""
         .format(env.host_machine['name'], env.host_machine['https_port']))
 
 
@@ -93,12 +94,12 @@ def dependencies_inst():
 
 
 @task
-def indico_inst(indico_inst_dir=env.indico_inst_dir, db_inst_dir=None):
+def indico_inst(**params):
     """
     Indico installation and first setup
     """
 
-    _update_params(indico_inst_dir=indico_inst_dir, db_inst_dir=db_inst_dir)
+    _update_params(**params)
 
     run('easy_install indico')
     run("echo -e \"{0}\nc\ny\n{1}\" | indico_initial_setup"
@@ -106,12 +107,12 @@ def indico_inst(indico_inst_dir=env.indico_inst_dir, db_inst_dir=None):
 
 
 @task
-def indico_config(**kwparams):
+def indico_config(**params):
     """
     Configure Indico and the database
     """
 
-    _update_params(**kwparams)
+    _update_params(**params)
 
     # Moving and modifying the Indico Apache .conf file
     _putl(os.path.join(env.config_dir, 'indico.conf'), env.httpd_confd_dir)
@@ -182,47 +183,42 @@ def vm_config(**params):
 
 
 @task
-def config(host_name=env.guest_machine['name'], config_dir=env.config_dir, indico_inst_dir=env.indico_inst_dir,
-           db_inst_dir=env.db_inst_dir, http_port_fwd=env.host_machine['http_port'], https_port_fwd=env.host_machine['https_port']):
+def config(**params):
     """
     Configure Indico and various aspects of the VM
     """
 
-    indico_config(host_name=host_name, config_dir=config_dir, indico_inst_dir=indico_inst_dir,
-                  http_port_fwd=http_port_fwd, https_port_fwd=https_port_fwd)
+    indico_config(**params)
 
-    if env.debug_vm:
-        _update_ports_debug()
+    _update_ports_debug()
 
-    vm_config(host_name=host_name, config_dir=config_dir, indico_inst_dir=indico_inst_dir,
-              db_inst_dir=db_inst_dir)
+    vm_config(**params)
 
 
 @task
-def deploy(host_name=env.guest_machine['name'], config_dir=env.config_dir,
-           indico_inst_dir=env.indico_inst_dir, db_inst_dir=None,
-           http_port_fwd=env.host_machine['http_port'], https_port_fwd=env.host_machine['https_port']):
+def deploy(**params):
     """
     Deploy Indico into the VM
     """
 
     dependencies_inst()
-    indico_inst(indico_inst_dir, db_inst_dir)
-    config(host_name, config_dir, indico_inst_dir, db_inst_dir, http_port_fwd, https_port_fwd)
+    indico_inst(**params)
+    config(**params)
 
 
 @task
-def start():
+def start(**params):
     """
     Start Indico
     """
 
-    _update_params()
+    _update_params(**params)
 
     run("zdaemon -C {0} start".format(os.path.join(env.indico_conf_dir, 'zdctl.conf')))
     run('service redis start')
     run('service httpd start')
 
+@task
 def launch_vm(**params):
     """
     Run the Virtual Machine
@@ -248,13 +244,13 @@ def launch_vm(**params):
           .format(env.qemu_log))
     print("VM running!")
 
-
-def config_no_cloud(config_dir=env.config_dir, vd_path=env.vd_path):
+@task
+def config_no_cloud(**params):
     """
     cloud-init no-cloud fake config
     """
 
-    _update_params(config_dir=config_dir, vd_path=vd_path)
+    _update_params(**params)
 
     local("sed -i .bak \'s|^password:.*|password: {0}|g\' {1}"
           .format(env.password, os.path.join(env.config_dir, 'user-data')))
@@ -262,7 +258,6 @@ def config_no_cloud(config_dir=env.config_dir, vd_path=env.vd_path):
           .format(env.vd_path, os.path.join(env.config_dir, 'user-data'),
                   os.path.join(env.config_dir, 'meta-data')))
 
-@task
 def cleanup_vm():
     with settings(warn_only=True):
         run('rm /etc/udev/rules.d/70-persistent-net.rules')
@@ -270,28 +265,22 @@ def cleanup_vm():
     run('shutdown -h now')
 
 @task
-def run_vm(host_port_fwd=env.host_machine['ssh_port'], img_path=env.img_path, vd_path=env.vd_path,
-              indico_inst_dir=env.indico_inst_dir, virtualization_cmd=env.virtualization_cmd,
-              http_port_fwd=env.host_machine['http_port'], https_port_fwd=env.host_machine['https_port']):
+def run_vm_debug(**params):
     """
     Run the VM and start Indico (Debugging purposes)
     """
     env.debug_vm = True
-    launch_vm(host_port_fwd=host_port_fwd, img_path=img_path, vd_path=vd_path, virtualization_cmd=virtualization_cmd,
-              http_port_fwd=http_port_fwd, https_port_fwd=https_port_fwd)
+    launch_vm(**params)
     start()
 
 
 @task
-def create_vm_img(host_name=env.guest_machine['name'], host_port_fwd=env.host_machine['ssh_port'], config_dir=env.config_dir,
-                  img_path=env.img_path, vd_path=env.vd_path, indico_inst_dir=env.indico_inst_dir,
-                  db_inst_dir=None, virtualization_cmd=env.virtualization_cmd):
+def create_vm_img(**params):
     """
     Creates a Virtual Image ready to be deployed on the cloud
     """
 
-    config_no_cloud(config_dir, vd_path)
-    launch_vm(host_port_fwd=host_port_fwd, img_path=img_path, vd_path=vd_path,
-              virtualization_cmd=virtualization_cmd, debug=False)
-    deploy(host_name=host_name, config_dir=config_dir, indico_inst_dir=indico_inst_dir, db_inst_dir=db_inst_dir)
+    config_no_cloud(**params)
+    launch_vm(**params)
+    deploy(**params)
     cleanup_vm()
