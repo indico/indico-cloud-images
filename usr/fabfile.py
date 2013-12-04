@@ -26,9 +26,6 @@ env.ports = [http, https]
 env.db_inst_dir = os.path.join(env.indico_inst_dir, env.db_inst_dirname)
 env.indico_conf_dir = os.path.join(env.indico_inst_dir, env.indico_conf_dirname)
 
-env.ssl_certs_dir = os.path.join(env.ssl_dir, env.ssl_certs_dirname)
-env.ssl_private_dir = os.path.join(env.ssl_dir, env.ssl_private_dirname)
-
 def _update_params(host_name=env.host_name, http_port=env.http_port, https_port=env.https_port,
                    ssl_pem_path=env.ssl_pem_path, ssl_key_path=env.ssl_key_path,
                    redis_pswd=env.redis_pswd, redis_port=env.redis_port):
