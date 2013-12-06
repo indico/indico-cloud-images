@@ -1,23 +1,18 @@
 #cloud-config
 
-yum_repos:
-    name=puias-unsupported:
-        baseurl: http://puias.princeton.edu/data/puias/unsupported/$releasever/$basearch/
-        gpgcheck: 1
-        gpgkey: file:///etc/pki/rpm-gpg/RPM-GPG-KEY-puias
-        name: PUIAS Unsupported $releasever
-    priority: # PUIAS_PRIORITY #
-
 write_files:
 -   content: |
-# INDICO_HTTPD_CONF_CONTENT #
-    path: # HTTPD_CONFD_DIR #/indico.conf
+{puias_repo_content}
+    path: /puias.repo
 -   content: |
-# INDICO_INDICO_CONF_CONTENT #
-    path: # INDICO_INST_DIR #/etc/indico.conf
+{indico_httpd_conf_content}
+    path: /indico_httpd.conf
 -   content: |
-# REDIS_CONF_CONTENT #
-    path: /etc/redis.conf
+{indico_indico_conf_content}
+    path: /indico_indico.conf
 -   content: |
-# SSL_CONF_CONTENT #
-    path: # HTTPD_CONFD_DIR #/ssl.conf
+{redis_conf_content}
+    path: /redis.conf
+-   content: |
+{ssl_conf_content}
+    path: /ssl.conf

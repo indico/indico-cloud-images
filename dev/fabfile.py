@@ -5,8 +5,6 @@ from fabric.context_managers import settings
 import os
 import uuid
 
-from fabric.network import ssh
-
 
 def build_parameters():
     env.hosts = [env.host_machine['name'] + ':' + str(env.host_machine['ssh_port'])]
@@ -45,15 +43,15 @@ def _update_ports_debug():
     # Modifying the ports in indico.conf
     sed(os.path.join(env.indico_conf_dir, 'indico.conf'),
         '^(#)? *BaseURL.*',
-        "BaseURL = \"http://{0}{1}/indico\""
+        "BaseURL = \"http://{0}:{1}/indico\""
         .format(env.host_machine['name'], env.host_machine['http_port']))
     sed(os.path.join(env.indico_conf_dir, 'indico.conf'),
         '^(#)? *BaseSecureURL.*',
-        "BaseSecureURL = \"https://{0}{1}/indico\""
+        "BaseSecureURL = \"https://{0}:{1}/indico\""
         .format(env.host_machine['name'], env.host_machine['https_port']))
     sed(os.path.join(env.indico_conf_dir, 'indico.conf'),
         '^(#)? *LoginURL.*',
-        "LoginURL = \"https://{0}{1}/indico/signIn.py\""
+        "LoginURL = \"https://{0}:{1}/indico/signIn.py\""
         .format(env.host_machine['name'], env.host_machine['https_port']))
 
 
@@ -63,6 +61,7 @@ def _putl(source_file, dest_dir):
     """
 
     put(source_file, '/')
+    run("mkdir -p {0}".format(dest_dir))
     run("mv -f /{0} {1}".format(os.path.basename(source_file), dest_dir))
 
 
@@ -75,9 +74,9 @@ def _gen_self_signed_cert():
     run("mkdir -p {0}".format(env.ssl_certs_dir))
     run("mkdir -p {0}".format(env.ssl_private_dir))
     run("openssl req -new -x509 -nodes -out {0} -keyout {1} -days 3650 -subj \'/CN={2}\'"
-        .format (os.path.join(env.ssl_certs_dir, 'self-gen.pem'),
-                 os.path.join(env.ssl_private_dir, 'self-gen.key'),
-                 env.guest_machine['name']))
+        .format(os.path.join(env.ssl_certs_dir, 'self-gen.pem'),
+                os.path.join(env.ssl_private_dir, 'self-gen.key'),
+                env.guest_machine['name']))
 
 
 @task
@@ -126,6 +125,21 @@ def indico_config(**params):
     run("sed -i.bak -r -e \"30s|.*|<VirtualHost *:{0}>|g\" {1}"
         .format(env.guest_machine['https_port'], os.path.join(env.httpd_confd_dir, 'indico.conf')))
 
+    # Modifying the ports in indico.conf
+    http = ':{0}'.format(env.guest_machine['http_port']) if env.guest_machine['http_port'] is not '80' else ''
+    https = ':{0}'.format(env.guest_machine['https_port']) if env.guest_machine['https_port'] is not '443' else ''
+    sed(os.path.join(env.indico_conf_dir, 'indico.conf'),
+        '^(#)? *BaseURL.*',
+        "BaseURL = \"http://{0}{1}/indico\""
+        .format(env.guest_machine['name'], http))
+    sed(os.path.join(env.indico_conf_dir, 'indico.conf'),
+        '^(#)? *BaseSecureURL.*',
+        "BaseSecureURL = \"https://{0}{1}/indico\""
+        .format(env.guest_machine['name'], https))
+    sed(os.path.join(env.indico_conf_dir, 'indico.conf'),
+        '^(#)? *LoginURL.*',
+        "LoginURL = \"https://{0}{1}/indico/signIn.py\""
+        .format(env.guest_machine['name'], https))
 
     # Adding a ServerName in httpd.conf
     sed(os.path.join(env.httpd_conf_dir, 'httpd.conf'),
@@ -143,7 +157,6 @@ def vm_config(**params):
 
     if env.debug_vm:
         _gen_self_signed_cert()
-
 
     # Adding the ports 80 and 443 to the iptables
     run("sed \"11i\\-A INPUT -m state --state NEW -m tcp -p tcp --dport {0} -j ACCEPT\" {1} > {2}"
@@ -190,8 +203,6 @@ def config(**params):
 
     indico_config(**params)
 
-    _update_ports_debug()
-
     vm_config(**params)
 
 
@@ -217,6 +228,7 @@ def start(**params):
     run("zdaemon -C {0} start".format(os.path.join(env.indico_conf_dir, 'zdctl.conf')))
     run('service redis start')
     run('service httpd start')
+
 
 @task
 def launch_vm(**params):
@@ -244,6 +256,7 @@ def launch_vm(**params):
           .format(env.qemu_log))
     print("VM running!")
 
+
 @task
 def config_no_cloud(**params):
     """
@@ -258,11 +271,13 @@ def config_no_cloud(**params):
           .format(env.vd_path, os.path.join(env.config_dir, 'user-data'),
                   os.path.join(env.config_dir, 'meta-data')))
 
+
 def cleanup_vm():
     with settings(warn_only=True):
         run('rm /etc/udev/rules.d/70-persistent-net.rules')
         run('rm /lib/udev/write_net_rules')
     run('shutdown -h now')
+
 
 @task
 def run_vm_debug(**params):
@@ -271,6 +286,7 @@ def run_vm_debug(**params):
     """
     env.debug_vm = True
     launch_vm(**params)
+    _update_ports_debug()
     start()
 
 

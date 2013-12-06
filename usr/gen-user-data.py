@@ -1,10 +1,10 @@
 import argparse
 import os
 import ast
-from distutils.util import strtobool
 
 parser = argparse.ArgumentParser(description='Deploy Indico on the cloud.')
 args = parser.parse_args()
+
 
 def _yes_no_input(message, default):
     c = '? '
@@ -13,11 +13,16 @@ def _yes_no_input(message, default):
     elif default.lower() == 'n':
         c = ' [y/N]? '
     s = raw_input(message+c) or default
-    return strtobool(s.lower())
+    if s.lower() == 'y':
+        return True
+    else:
+        return False
+
 
 def _input_default(message, default):
     res = raw_input("{0} [{1}]: ".format(message, default)) or default
     return res
+
 
 def config():
     if _yes_no_input('Do you want to use a configuration file', 'n'):
@@ -55,24 +60,24 @@ def config():
         puias_priority = _input_default('Insert the priority for the puias-unsupported repository', '19')
 
         conf_dict = {
-            'indico_inst_dir'   :   indico_inst_dir,
-            'db_inst_dir'       :   db_inst_dir,
-            'httpd_conf_dir'    :   httpd_conf_dir,
-            'httpd_confd_dir'   :   httpd_confd_dir,
-            'ssl_certs_dir'     :   ssl_certs_dir,
-            'ssl_private_dir'   :   ssl_private_dir,
-            'load_ssl'          :   str(load_ssl),
-            'pem_source'        :   pem_source,
-            'key_source'        :   key_source,
-            'http_port'         :   http_port,
-            'https_port'        :   https_port,
-            'host_name'         :   host_name,
-            'iptables_path'     :   iptables_path,
-            'redis_host'        :   redis_host,
-            'redis_port'        :   redis_port,
-            'redis_pswd'        :   redis_pswd,
-            'yum_repos_dir'     :   yum_repos_dir,
-            'puias_priority'    :   puias_priority
+            'indico_inst_dir': indico_inst_dir,
+            'db_inst_dir': db_inst_dir,
+            'httpd_conf_dir': httpd_conf_dir,
+            'httpd_confd_dir': httpd_confd_dir,
+            'ssl_certs_dir': ssl_certs_dir,
+            'ssl_private_dir': ssl_private_dir,
+            'load_ssl': str(load_ssl),
+            'pem_source': pem_source,
+            'key_source': key_source,
+            'http_port': http_port,
+            'https_port': https_port,
+            'host_name': host_name,
+            'iptables_path': iptables_path,
+            'redis_host': redis_host,
+            'redis_port': redis_port,
+            'redis_pswd': redis_pswd,
+            'yum_repos_dir': yum_repos_dir,
+            'puias_priority': puias_priority
         }
 
         if _yes_no_input('Do you want to generate a configuration file', 'y'):
@@ -87,79 +92,94 @@ def config():
 
     return conf_dict
 
-def _fill_values(rules_dict, line):
-    for key in rules_dict.keys():
-        line = line.replace(key, rules_dict[key])
-    return line
 
 def _gen_file(rules_dict, in_path, out_path):
     with open(in_path, 'r') as fin:
         with open(out_path, 'w+') as fout:
-            for line in fin:
-                line = _fill_values(rules_dict, line)
-                fout.write(line)
+            fout.write(fin.read().format(**rules_dict))
+
 
 def _gen_indico_httpd_conf(conf_dict):
     in_path = 'tpl/indico_httpd.conf'
     out_path = 'config/indico_httpd.conf'
     rules_dict = {
-        '# VIRTUALHOST_HTTP_PORT #'     :   "<VirtualHost *:{0}>".format(conf_dict['http_port']),
-        '# VIRTUALHOST_HTTPS_PORT #'    :   "<VirtualHost *:{0}>".format(conf_dict['https_port']),
-        '# INDICO_INST_DIR #'           :   conf_dict['indico_inst_dir'],
-        '# SSL_PEM_PATH #'              :   os.path.join(conf_dict['ssl_certs_dir'], os.path.basename(conf_dict['pem_source'])),
-        '# SSL_KEY_PATH #'              :   os.path.join(conf_dict['ssl_private_dir'], os.path.basename(conf_dict['key_source']))
+        'virtualhost_http_port': "<VirtualHost *:{0}>".format(conf_dict['http_port']),
+        'virtualhost_https_port': "<VirtualHost *:{0}>".format(conf_dict['https_port']),
+        'indico_inst_dir': conf_dict['indico_inst_dir'],
+        'ssl_pem_path': os.path.join(conf_dict['ssl_certs_dir'], os.path.basename(conf_dict['pem_source'])),
+        'ssl_key_path': os.path.join(conf_dict['ssl_private_dir'], os.path.basename(conf_dict['key_source']))
     }
 
     _gen_file(rules_dict, in_path, out_path)
 
+
 def _gen_indico_indico_conf(conf_dict):
+    http = ':{0}'.format(conf_dict['http_port']) if conf_dict['http_port'] is not '80' else ''
+    https = ':{0}'.format(conf_dict['https_port']) if conf_dict['https_port'] is not '443' else ''
     in_path = 'tpl/indico_indico.conf'
     out_path = 'config/indico_indico.conf'
     rules_dict = {
-        '# REDIS_CONNECTION_URL #'  :   "RedisConnectionURL = \'redis://unused:{0}@{1}:{2}/0\'" \
-                                        .format(conf_dict['redis_pswd'], conf_dict['redis_host'], conf_dict['redis_port']),
-        '# BASE_URL #'              :   "BaseURL = \"http://{0}:{1}/indico\"".format(conf_dict['host_name'], conf_dict['http_port']),
-        '# BASE_SECURE_URL #'       :   "BaseSecureURL = \"http://{0}:{1}/indico\"".format(conf_dict['host_name'], conf_dict['https_port']),
-        '# LOGIN_URL #'             :   "LoginURL = \"https://{0}:{1}/indico/signIn.py\"" \
-                                        .format(conf_dict['host_name'], conf_dict['https_port']),
-        '# INDICO_INST_DIR #'       :   conf_dict['indico_inst_dir'],
-        '# REDIS_CACHE_URL #'       :   "RedisCacheURL = \'redis://unused:{0}@{1}:{2}/1\'" \
-                                        .format(conf_dict['redis_pswd'], conf_dict['redis_host'], conf_dict['redis_port'])
+        'redis_connection_url': "RedisConnectionURL = \'redis://unused:{0}@{1}:{2}/0\'"
+                                .format(conf_dict['redis_pswd'], conf_dict['redis_host'], conf_dict['redis_port']),
+        'base_url': "BaseURL = \"http://{0}{1}/indico\"".format(conf_dict['host_name'], http),
+        'base_secure_url': "BaseSecureURL = \"https://{0}{1}/indico\"".format(conf_dict['host_name'], https),
+        'login_url': "LoginURL = \"https://{0}{1}/indico/signIn.py\""
+                     .format(conf_dict['host_name'], https),
+        'indico_inst_dir': conf_dict['indico_inst_dir'],
+        'redis_cache_url': "RedisCacheURL = \'redis://unused:{0}@{1}:{2}/1\'"
+                           .format(conf_dict['redis_pswd'], conf_dict['redis_host'], conf_dict['redis_port'])
     }
 
     _gen_file(rules_dict, in_path, out_path)
+
 
 def _gen_redis_conf(conf_dict):
     in_path = 'tpl/redis.conf'
     out_path = 'config/redis.conf'
     rules_dict = {
-        '# REDIS_PSWD #'    :   conf_dict['redis_pswd'],
-        '# REDIS_PORT #'    :   conf_dict['redis_port']
+        'redis_pswd': conf_dict['redis_pswd'],
+        'redis_port': conf_dict['redis_port']
     }
-    
+
     _gen_file(rules_dict, in_path, out_path)
+
+
+def _gen_puias_repo(conf_dict):
+    in_path = 'tpl/puias.repo'
+    out_path = 'config/puias.repo'
+    rules_dict = {
+        'puias_priority': conf_dict['puias_priority']
+    }
+
+    _gen_file(rules_dict, in_path, out_path)
+
 
 def _gen_script(conf_dict):
     in_path = 'tpl/user-data-script.sh'
     out_path = 'config/user-data-script.sh'
     rules_dict = {
-        '# INDICO_INST_DIR #'   :   conf_dict['indico_inst_dir'],
-        '# DB_INST_DIR #'       :   conf_dict['db_inst_dir'],
-        '# HTTPD_CONF_DIR #'    :   conf_dict['httpd_conf_dir'],
-        '# HOST_NAME #'         :   conf_dict['host_name'],
-        '# SSL_CERTS_DIR #'     :   conf_dict['ssl_certs_dir'],
-        '# SSL_PRIVATE_DIR #'   :   conf_dict['ssl_private_dir'],
-        '# LOAD_SSL #'          :   conf_dict['load_ssl'].lower(),
-        '# SSL_PEM_PATH #'      :   os.path.join(conf_dict['ssl_certs_dir'], os.path.basename(conf_dict['pem_source'])),
-        '# SSL_KEY_PATH #'      :   os.path.join(conf_dict['ssl_private_dir'], os.path.basename(conf_dict['key_source'])),
-        '# IPTABLES_PATH #'     :   conf_dict['iptables_path'],
-        '# HTTP_PORT #'         :   conf_dict['http_port'],
-        '# HTTPS_PORT #'        :   conf_dict['https_port']
+        'indico_inst_dir': conf_dict['indico_inst_dir'],
+        'yum_repos_dir': conf_dict['yum_repos_dir'],
+        'db_inst_dir': conf_dict['db_inst_dir'],
+        'httpd_conf_dir': conf_dict['httpd_conf_dir'],
+        'httpd_confd_dir': conf_dict['httpd_confd_dir'],
+        'host_name': conf_dict['host_name'],
+        'ssl_certs_dir': conf_dict['ssl_certs_dir'],
+        'ssl_private_dir': conf_dict['ssl_private_dir'],
+        'load_ssl': conf_dict['load_ssl'].lower(),
+        'ssl_pem_path': os.path.join(conf_dict['ssl_certs_dir'], os.path.basename(conf_dict['pem_source'])),
+        'ssl_key_path': os.path.join(conf_dict['ssl_private_dir'], os.path.basename(conf_dict['key_source'])),
+        'iptables_path': conf_dict['iptables_path'],
+        'http_port': conf_dict['http_port'],
+        'https_port': conf_dict['https_port']
     }
 
     _gen_file(rules_dict, in_path, out_path)
 
+
 def _gen_cloud_config(conf_dict):
+    with open('config/puias.repo', 'r') as f:
+        puias_repo_content = f.read()
     with open('config/indico_httpd.conf', 'r') as f:
         indico_httpd_conf_content = f.read()
     with open('config/indico_indico.conf', 'r') as f:
@@ -172,37 +192,34 @@ def _gen_cloud_config(conf_dict):
     in_path = 'tpl/cloud-config'
     out_path = 'config/cloud-config'
     rules_dict = {
-        '# PUIAS_PRIORITY #'                :   conf_dict['puias_priority'],
-        '# HTTPD_CONFD_DIR #'               :   conf_dict['httpd_confd_dir'],
-        '# INDICO_INST_DIR #'               :   conf_dict['indico_inst_dir'],
-        '# INDICO_HTTPD_CONF_CONTENT #'     :   indico_httpd_conf_content,
-        '# INDICO_INDICO_CONF_CONTENT #'    :   indico_indico_conf_content,
-        '# REDIS_CONF_CONTENT #'            :   redis_conf_content,
-        '# SSL_CONF_CONTENT #'              :   ssl_conf_content
+        'puias_repo_content': puias_repo_content,
+        'indico_httpd_conf_content': indico_httpd_conf_content,
+        'indico_indico_conf_content': indico_indico_conf_content,
+        'redis_conf_content': redis_conf_content,
+        'ssl_conf_content': ssl_conf_content
     }
 
     _gen_file(rules_dict, in_path, out_path)
+
 
 def _gen_config_files(conf_dict):
     _gen_indico_httpd_conf(conf_dict)
     _gen_indico_indico_conf(conf_dict)
     _gen_redis_conf(conf_dict)
+    _gen_puias_repo(conf_dict)
     _gen_script(conf_dict)
     _gen_cloud_config(conf_dict)
+
 
 def main():
     conf_dict = config()
     _gen_config_files(conf_dict)
-    mime_path = _input_default('Choose a path for the MIME file', "mime-user-data.gz")
-    os.system("./write-mime-multipart -z --output {0}".format(mime_path) \
-              + " config/user-data-script.sh" \
-              + " config/cloud-config" \
-              # + " config/put-file-handler.py" \
-              # + " config/indico_httpd.conf:text/plain" \
-              # + " config/indico_indico.conf:text/plain" \
-              # + " config/redis.conf:text/plain" \
-              # + " config/ssl.conf:text/plain"
-    )
+    mime_path = _input_default('Choose a path for the MIME file', "user-data")
+    os.system("./write-mime-multipart --output {0}".format(mime_path)
+              + " config/user-data-script.sh"
+              + " config/cloud-config"
+              )
+
 
 if __name__ == '__main__':
     main()

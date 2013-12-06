@@ -1,0 +1,6 @@
+        [puias-unsupported]
+        name=PUIAS Unsupported $releasever
+        baseurl=http://puias.princeton.edu/data/puias/unsupported/$releasever/$basearch/
+        priority={puias_priority}
+        gpgcheck=1
+        gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-puias
