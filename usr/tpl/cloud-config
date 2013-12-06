@@ -16,3 +16,4 @@ write_files:
 -   content: |
 {ssl_conf_content}
     path: /ssl.conf
+{ssl_files}

@@ -1,0 +1,6 @@
+-   content: |
+{pem_content}
+    path: /{pem_filename}
+-   content: |
+{key_content}
+    path: /{key_filename}

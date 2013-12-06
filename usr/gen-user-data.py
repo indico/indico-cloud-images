@@ -66,7 +66,7 @@ def config():
             'httpd_confd_dir': httpd_confd_dir,
             'ssl_certs_dir': ssl_certs_dir,
             'ssl_private_dir': ssl_private_dir,
-            'load_ssl': str(load_ssl),
+            'load_ssl': load_ssl,
             'pem_source': pem_source,
             'key_source': key_source,
             'http_port': http_port,
@@ -166,12 +166,30 @@ def _gen_script(conf_dict):
         'host_name': conf_dict['host_name'],
         'ssl_certs_dir': conf_dict['ssl_certs_dir'],
         'ssl_private_dir': conf_dict['ssl_private_dir'],
-        'load_ssl': conf_dict['load_ssl'].lower(),
-        'ssl_pem_path': os.path.join(conf_dict['ssl_certs_dir'], os.path.basename(conf_dict['pem_source'])),
-        'ssl_key_path': os.path.join(conf_dict['ssl_private_dir'], os.path.basename(conf_dict['key_source'])),
+        'load_ssl': str(conf_dict['load_ssl']).lower(),
+        'ssl_pem_filename': os.path.basename(conf_dict['pem_source']),
+        'ssl_key_filename': os.path.basename(conf_dict['key_source']),
         'iptables_path': conf_dict['iptables_path'],
         'http_port': conf_dict['http_port'],
         'https_port': conf_dict['https_port']
+    }
+
+    _gen_file(rules_dict, in_path, out_path)
+
+
+def _gen_cloud_config_ssl(conf_dict):
+    with open(conf_dict['pem_source'], 'r') as f:
+        pem_content = f.read()
+    with open(conf_dict['key_source'], 'r') as f:
+        key_content = f.read()
+
+    in_path = 'tpl/cloud-config-ssl'
+    out_path = 'config/cloud-config-ssl'
+    rules_dict = {
+        'pem_content': pem_content,
+        'pem_filename': os.path.basename(conf_dict['pem_source']),
+        'key_content': key_content,
+        'key_filename': os.path.basename(conf_dict['key_source'])
     }
 
     _gen_file(rules_dict, in_path, out_path)
@@ -189,6 +207,11 @@ def _gen_cloud_config(conf_dict):
     with open('config/ssl.conf', 'r') as f:
         ssl_conf_content = f.read()
 
+    ssl_files = ''
+    if conf_dict['load_ssl']:
+        with open('config/cloud-config-ssl', 'r') as f:
+            ssl_files = f.read()
+
     in_path = 'tpl/cloud-config'
     out_path = 'config/cloud-config'
     rules_dict = {
@@ -196,7 +219,8 @@ def _gen_cloud_config(conf_dict):
         'indico_httpd_conf_content': indico_httpd_conf_content,
         'indico_indico_conf_content': indico_indico_conf_content,
         'redis_conf_content': redis_conf_content,
-        'ssl_conf_content': ssl_conf_content
+        'ssl_conf_content': ssl_conf_content,
+        'ssl_files': ssl_files
     }
 
     _gen_file(rules_dict, in_path, out_path)
@@ -208,6 +232,8 @@ def _gen_config_files(conf_dict):
     _gen_redis_conf(conf_dict)
     _gen_puias_repo(conf_dict)
     _gen_script(conf_dict)
+    if conf_dict['load_ssl']:
+        _gen_cloud_config_ssl(conf_dict)
     _gen_cloud_config(conf_dict)
 
 
