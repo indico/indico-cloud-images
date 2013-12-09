@@ -24,6 +24,16 @@ def _input_default(message, default):
     return res
 
 
+def _add_tabs(old_content):
+    new_content = ''
+    for line in old_content.splitlines(True):
+        new_line = line
+        if line != '\n':
+            new_line = '        ' + line
+        new_content = new_content + new_line
+    return new_content
+
+
 def config():
     if _yes_no_input('Do you want to use a configuration file', 'n'):
         conf_path = _input_default('Specify the configuration file path', 'gen-user-data.conf')
@@ -179,9 +189,9 @@ def _gen_script(conf_dict):
 
 def _gen_cloud_config_ssl(conf_dict):
     with open(conf_dict['pem_source'], 'r') as f:
-        pem_content = f.read()
+        pem_content = _add_tabs(f.read())
     with open(conf_dict['key_source'], 'r') as f:
-        key_content = f.read()
+        key_content = _add_tabs(f.read())
 
     in_path = 'tpl/cloud-config-ssl'
     out_path = 'config/cloud-config-ssl'
@@ -197,18 +207,19 @@ def _gen_cloud_config_ssl(conf_dict):
 
 def _gen_cloud_config(conf_dict):
     with open('config/puias.repo', 'r') as f:
-        puias_repo_content = f.read()
+        puias_repo_content = _add_tabs(f.read())
     with open('config/indico_httpd.conf', 'r') as f:
-        indico_httpd_conf_content = f.read()
+        indico_httpd_conf_content = _add_tabs(f.read())
     with open('config/indico_indico.conf', 'r') as f:
-        indico_indico_conf_content = f.read()
+        indico_indico_conf_content = _add_tabs(f.read())
     with open('config/redis.conf', 'r') as f:
-        redis_conf_content = f.read()
+        redis_conf_content = _add_tabs(f.read())
     with open('config/ssl.conf', 'r') as f:
-        ssl_conf_content = f.read()
+        ssl_conf_content = _add_tabs(f.read())
 
     ssl_files = ''
     if conf_dict['load_ssl']:
+        _gen_cloud_config_ssl(conf_dict)
         with open('config/cloud-config-ssl', 'r') as f:
             ssl_files = f.read()
 
@@ -232,8 +243,6 @@ def _gen_config_files(conf_dict):
     _gen_redis_conf(conf_dict)
     _gen_puias_repo(conf_dict)
     _gen_script(conf_dict)
-    if conf_dict['load_ssl']:
-        _gen_cloud_config_ssl(conf_dict)
     _gen_cloud_config(conf_dict)
 
 

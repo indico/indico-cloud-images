@@ -55,3 +55,12 @@ mv -f /indico_httpd.conf {httpd_confd_dir}/indico.conf
 mv -f /indico_indico.conf {indico_inst_dir}/etc/indico.conf
 mv -f /redis.conf /etc/redis.conf
 mv -f /ssl.conf {httpd_confd_dir}/ssl.conf
+
+touch /etc/sudoers.tmp
+cp /etc/sudoers /tmp/sudoers.new
+find_replace /tmp/sudoers.new "Defaults    !requiretty" "Defaults    requiretty"
+visudo -c -f /tmp/sudoers.new
+if [ "$?" -eq "0" ]; then
+    cp /tmp/sudoers.new /etc/sudoers
+fi
+rm /etc/sudoers.tmp
