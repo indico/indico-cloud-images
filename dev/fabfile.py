@@ -6,7 +6,7 @@ import os
 import uuid
 
 
-def build_parameters():
+def _build_parameters():
     env.hosts = [env.host_machine['name'] + ':' + str(env.host_machine['ssh_port'])]
     env.img_path = os.path.join(env.img_dir, env.img_name)
     env.vd_path = os.path.join(env.img_dir, env.vd_name)
@@ -21,7 +21,7 @@ def _update_params(**params):
     """
 
     env.update(params)
-    build_parameters()
+    _build_parameters()
 
 
 PUIAS_REPO_URL = "http://springdale.princeton.edu/data/puias/6.4/x86_64/os/RPM-GPG-KEY-puias"
@@ -30,9 +30,8 @@ YUM_DEPS = ['python-devel', 'gcc', 'httpd', 'mod_wsgi', 'python-reportlab',
 INDICO_EXTRA_DEPS = ['hiredis', 'python-ldap']
 
 env.conf = "fabfile.conf"
-
 execfile(env.conf, {}, env)
-build_parameters()
+_build_parameters()
 
 
 def _update_ports_debug():
@@ -265,7 +264,7 @@ def config_no_cloud(**params):
 
     _update_params(**params)
 
-    local("sed -i .bak \'s|^password:.*|password: {0}|g\' {1}"
+    local("sed -i.bak \'s|^password:.*|password: {0}|g\' {1}"
           .format(env.password, os.path.join(env.config_dir, 'user-data')))
     local("mkisofs -output {0} -volid cidata -joliet -rock {1} {2}"
           .format(env.vd_path, os.path.join(env.config_dir, 'user-data'),
