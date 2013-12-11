@@ -5,6 +5,9 @@ import ast
 parser = argparse.ArgumentParser(description='Deploy Indico on the cloud.')
 args = parser.parse_args()
 
+conf_dir = '../conf'
+tpl_dir = '../tpl'
+
 
 def _yes_no_input(message, default):
     c = '? '
@@ -110,8 +113,8 @@ def _gen_file(rules_dict, in_path, out_path):
 
 
 def _gen_indico_httpd_conf(conf_dict):
-    in_path = 'tpl/indico_httpd.conf'
-    out_path = 'config/indico_httpd.conf'
+    in_path = os.path.join(tpl_dir, 'indico_httpd.conf')
+    out_path = os.path.join(conf_dir, 'indico_httpd.conf')
     rules_dict = {
         'virtualhost_http_port': "<VirtualHost *:{0}>".format(conf_dict['http_port']),
         'virtualhost_https_port': "<VirtualHost *:{0}>".format(conf_dict['https_port']),
@@ -126,8 +129,8 @@ def _gen_indico_httpd_conf(conf_dict):
 def _gen_indico_indico_conf(conf_dict):
     http = ':{0}'.format(conf_dict['http_port']) if conf_dict['http_port'] is not '80' else ''
     https = ':{0}'.format(conf_dict['https_port']) if conf_dict['https_port'] is not '443' else ''
-    in_path = 'tpl/indico_indico.conf'
-    out_path = 'config/indico_indico.conf'
+    in_path = os.path.join(tpl_dir, 'indico_indico.conf')
+    out_path = os.path.join(conf_dir, 'indico_indico.conf')
     rules_dict = {
         'redis_connection_url': "RedisConnectionURL = \'redis://unused:{0}@{1}:{2}/0\'"
                                 .format(conf_dict['redis_pswd'], conf_dict['redis_host'], conf_dict['redis_port']),
@@ -144,8 +147,8 @@ def _gen_indico_indico_conf(conf_dict):
 
 
 def _gen_redis_conf(conf_dict):
-    in_path = 'tpl/redis.conf'
-    out_path = 'config/redis.conf'
+    in_path = os.path.join(tpl_dir, 'redis.conf')
+    out_path = os.path.join(conf_dir, 'redis.conf')
     rules_dict = {
         'redis_pswd': conf_dict['redis_pswd'],
         'redis_port': conf_dict['redis_port']
@@ -155,8 +158,8 @@ def _gen_redis_conf(conf_dict):
 
 
 def _gen_puias_repo(conf_dict):
-    in_path = 'tpl/puias.repo'
-    out_path = 'config/puias.repo'
+    in_path = os.path.join(tpl_dir, 'puias.repo')
+    out_path = os.path.join(conf_dir, 'puias.repo')
     rules_dict = {
         'puias_priority': conf_dict['puias_priority']
     }
@@ -165,8 +168,8 @@ def _gen_puias_repo(conf_dict):
 
 
 def _gen_script(conf_dict):
-    in_path = 'tpl/user-data-script.sh'
-    out_path = 'config/user-data-script.sh'
+    in_path = os.path.join(tpl_dir, 'user-data-script.sh')
+    out_path = os.path.join(conf_dir, 'user-data-script.sh')
     rules_dict = {
         'indico_inst_dir': conf_dict['indico_inst_dir'],
         'yum_repos_dir': conf_dict['yum_repos_dir'],
@@ -193,8 +196,8 @@ def _gen_cloud_config_ssl(conf_dict):
     with open(conf_dict['key_source'], 'r') as f:
         key_content = _add_tabs(f.read())
 
-    in_path = 'tpl/cloud-config-ssl'
-    out_path = 'config/cloud-config-ssl'
+    in_path = os.path.join(tpl_dir, 'cloud-config-ssl')
+    out_path = os.path.join(conf_dir, 'cloud-config-ssl')
     rules_dict = {
         'pem_content': pem_content,
         'pem_filename': os.path.basename(conf_dict['pem_source']),
@@ -206,25 +209,25 @@ def _gen_cloud_config_ssl(conf_dict):
 
 
 def _gen_cloud_config(conf_dict):
-    with open('config/puias.repo', 'r') as f:
+    with open(os.path.join(conf_dir, 'puias.repo'), 'r') as f:
         puias_repo_content = _add_tabs(f.read())
-    with open('config/indico_httpd.conf', 'r') as f:
+    with open(os.path.join(conf_dir, 'indico_httpd.conf'), 'r') as f:
         indico_httpd_conf_content = _add_tabs(f.read())
-    with open('config/indico_indico.conf', 'r') as f:
+    with open(os.path.join(conf_dir, 'indico_indico.conf'), 'r') as f:
         indico_indico_conf_content = _add_tabs(f.read())
-    with open('config/redis.conf', 'r') as f:
+    with open(os.path.join(conf_dir, 'redis.conf'), 'r') as f:
         redis_conf_content = _add_tabs(f.read())
-    with open('config/ssl.conf', 'r') as f:
+    with open(os.path.join(conf_dir, 'ssl.conf'), 'r') as f:
         ssl_conf_content = _add_tabs(f.read())
 
     ssl_files = ''
     if conf_dict['load_ssl']:
         _gen_cloud_config_ssl(conf_dict)
-        with open('config/cloud-config-ssl', 'r') as f:
+        with open(os.path.join(conf_dir, 'cloud-config-ssl'), 'r') as f:
             ssl_files = f.read()
 
-    in_path = 'tpl/cloud-config'
-    out_path = 'config/cloud-config'
+    in_path = os.path.join(tpl_dir, 'cloud-config')
+    out_path = os.path.join(conf_dir, 'cloud-config')
     rules_dict = {
         'puias_repo_content': puias_repo_content,
         'indico_httpd_conf_content': indico_httpd_conf_content,
@@ -251,8 +254,8 @@ def main():
     _gen_config_files(conf_dict)
     mime_path = _input_default('Choose a path for the MIME file', "user-data")
     os.system("./write-mime-multipart --output {0}".format(mime_path)
-              + " config/user-data-script.sh"
-              + " config/cloud-config"
+              + " {0}".format(os.path.join(conf_dir, 'user-data-script.sh'))
+              + " {0}".format(os.path.join(conf_dir, 'cloud-config'))
               )
 
 
