@@ -1,5 +1,5 @@
 from fabric.api import *
-from fabric.contrib.files import sed
+from fabric.contrib.files import sed, contains
 from fabric.operations import put, run
 import os
 
@@ -89,6 +89,16 @@ def update_server(**params):
     run("sed -i.bak -r -e \"30s|.*|<VirtualHost *:{0}>|g\" {1}"
         .format(env.machine['https_port'], os.path.join(env.httpd_confd_dir, 'indico.conf')))
 
+    sed(os.path.join(env.indico_conf_dir, 'indico.conf'),
+        '^SupportEmail.*',
+        "SupportEmail         = \"root@{0}\"".format(env.machine['name']))
+    sed(os.path.join(env.indico_conf_dir, 'indico.conf'),
+        '^PublicSupportEmail.*',
+        "PublicSupportEmail         = \"root@{0}\"".format(env.machine['name']))
+    sed(os.path.join(env.indico_conf_dir, 'indico.conf'),
+        '^NoReplyEmail.*',
+        "NoReplyEmail         = \"noreply-root@{0}\"".format(env.machine['name']))
+
 
 @task
 def update_redis(**params):
@@ -107,6 +117,32 @@ def update_redis(**params):
 
 
 @task
+def update_smtp(**params):
+    """
+    Change the SMTP configuration
+    """
+
+    _update_params(**params)
+
+    sed(os.path.join(env.indico_conf_dir, 'indico.conf'),
+        '^SmtpServer.*',
+        "SmtpServer           = ('{0}', {0})".format(env.smtp_server_name, env.smtp_server_port))
+    sed(os.path.join(env.indico_conf_dir, 'indico.conf'),
+        '^SmtpLogin.*',
+        "SmtpLogin           = \"{0}\"".format(env.smtp_login))
+    sed(os.path.join(env.indico_conf_dir, 'indico.conf'),
+        '^SmtpPassword.*',
+        "SmtpPassword           = \"{0}\"".format(env.smtp_pswd))
+    if env.postfix:
+        sed('/etc/postfix/master.cf',
+            '.*      inet  n       -       n       -       -       smtpd',
+            "{0}      inet  n       -       n       -       -       smtpd".format(env.smtp_server_port))
+        if not contains('/etc/postfix/master.cf', 'resolve_numeric_domain = yes'):
+            append('/etc/postfix/master.cf', 'resolve_numeric_domain = yes')
+
+
+
+@task
 def config(**params):
     """
     Configure the VM with all the necessary information
@@ -115,6 +151,7 @@ def config(**params):
     load_ssl(**params)
     update_server(**params)
     update_redis(**params)
+    update_smtp(**params)
 
 
 @task

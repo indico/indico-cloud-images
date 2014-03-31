@@ -41,6 +41,9 @@ fi
 add_line {iptables_path} 11 "-A INPUT -m state --state NEW -m tcp -p tcp --dport {http_port} -j ACCEPT"
 add_line {iptables_path} 12 "-A INPUT -m state --state NEW -m tcp -p tcp --dport {https_port} -j ACCEPT"
 service iptables restart
+if {postfix}; then
+    echo "resolve_numeric_domain = yes" >> /etc/postfix/main.cf
+    find_replace /etc/postfix/master.cf ".*      inet  n       -       n       -       -       smtpd" "{smtp_server_port}      inet  n       -       n       -       -       smtpd"
 for idir in 'archive' 'cache' 'htdocs' 'log' 'tmp'
 do
     semanage fcontext -a -t httpd_sys_content_t "{indico_inst_dir}/$idir(/.*)?"

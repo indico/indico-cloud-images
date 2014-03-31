@@ -1,12 +1,14 @@
 import argparse
 import os
 import ast
+from fabric.colors import green
 
 parser = argparse.ArgumentParser(description='Deploy Indico on the cloud.')
 args = parser.parse_args()
 
 conf_dir = '../conf'
 tpl_dir = '../tpl'
+vrule = '---------------------------------------------------'
 
 
 def _yes_no_input(message, default):
@@ -69,6 +71,15 @@ def config():
         redis_port = _input_default('Insert the Redis port', '6379')
         redis_pswd = raw_input('Insert the Redis password: ')
 
+        postfix = _yes_no_input('Do you want to use Postfix as mail server', 'y')
+        if postfix:
+            smtp_server_name = 'localhost'
+        else:
+            smtp_server_name = _input_default('Insert the SMTP server name', 'localhost')
+        smtp_server_port = _input_default('Insert the SMTP server port', '25')
+        smtp_login = raw_input('Insert the SMTP login')
+        smtp_pswd = raw_input('Insert the SMTP password')
+
         yum_repos_dir = _input_default('Insert the YUM repositories directory', '/etc/yum.repos.d')
         puias_priority = _input_default('Insert the priority for the puias-unsupported repository', '19')
 
@@ -90,7 +101,12 @@ def config():
             'redis_port': redis_port,
             'redis_pswd': redis_pswd,
             'yum_repos_dir': yum_repos_dir,
-            'puias_priority': puias_priority
+            'puias_priority': puias_priority,
+            'postfix': postfix,
+            'smtp_server_name': smtp_server_name,
+            'smtp_server_port': smtp_server_port,
+            'smtp_login': smtp_login,
+            'smtp_pswd': smtp_pswd
         }
 
         if _yes_no_input('Do you want to generate a configuration file', 'y'):
@@ -107,9 +123,12 @@ def config():
 
 
 def _gen_file(rules_dict, in_path, out_path):
+    print vrule
+    print "Generating {0}".format(os.path.basename(in_path))
     with open(in_path, 'r') as fin:
         with open(out_path, 'w+') as fout:
             fout.write(fin.read().format(**rules_dict))
+    print green("{0} generated".format(os.path.basename(in_path)))
 
 
 def _gen_indico_httpd_conf(conf_dict):
@@ -132,15 +151,17 @@ def _gen_indico_indico_conf(conf_dict):
     in_path = os.path.join(tpl_dir, 'indico_indico.conf')
     out_path = os.path.join(conf_dir, 'indico_indico.conf')
     rules_dict = {
-        'redis_connection_url': "RedisConnectionURL = \'redis://unused:{0}@{1}:{2}/0\'"
-                                .format(conf_dict['redis_pswd'], conf_dict['redis_host'], conf_dict['redis_port']),
-        'base_url': "BaseURL = \"http://{0}{1}/indico\"".format(conf_dict['host_name'], http),
-        'base_secure_url': "BaseSecureURL = \"https://{0}{1}/indico\"".format(conf_dict['host_name'], https),
-        'login_url': "LoginURL = \"https://{0}{1}/indico/signIn.py\""
-                     .format(conf_dict['host_name'], https),
+        'redis_pswd': conf_dict['redis_pswd'],
+        'redis_host': conf_dict['redis_host'],
+        'redis_port': conf_dict['redis_port'],
+        'host_name': conf_dict['host_name'],
+        'http': http,
+        'https': https,
         'indico_inst_dir': conf_dict['indico_inst_dir'],
-        'redis_cache_url': "RedisCacheURL = \'redis://unused:{0}@{1}:{2}/1\'"
-                           .format(conf_dict['redis_pswd'], conf_dict['redis_host'], conf_dict['redis_port'])
+        'smtp_server_name': conf_dict['smtp_server_name'],
+        'smtp_server_port': conf_dict['smtp_server_port'],
+        'smtp_login': conf_dict['smtp_login'],
+        'smtp_pswd': conf_dict['smtp_pswd']
     }
 
     _gen_file(rules_dict, in_path, out_path)
@@ -184,7 +205,9 @@ def _gen_script(conf_dict):
         'ssl_key_filename': os.path.basename(conf_dict['key_source']),
         'iptables_path': conf_dict['iptables_path'],
         'http_port': conf_dict['http_port'],
-        'https_port': conf_dict['https_port']
+        'https_port': conf_dict['https_port'],
+        'postfix': str(conf_dict['postfix']).lower(),
+        'smtp_server_port': conf_dict['smtp_server_port']
     }
 
     _gen_file(rules_dict, in_path, out_path)
@@ -251,12 +274,15 @@ def _gen_config_files(conf_dict):
 
 def main():
     conf_dict = config()
-    _gen_config_files(conf_dict)
     mime_path = _input_default('Choose a path for the MIME file', "user-data")
+    print '---------- Starting MIME file generation ----------'
+    _gen_config_files(conf_dict)
     os.system("./write-mime-multipart --output {0}".format(mime_path)
               + " {0}".format(os.path.join(conf_dir, 'user-data-script.sh'))
               + " {0}".format(os.path.join(conf_dir, 'cloud-config'))
               )
+    print vrule
+    print green('--------------- MIME file generated ---------------')
 
 
 if __name__ == '__main__':

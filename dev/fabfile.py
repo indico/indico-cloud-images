@@ -7,12 +7,14 @@ import uuid
 
 
 def _build_parameters():
-    env.hosts = [env.host_machine['name'] + ':' + str(env.host_machine['ssh_port'])]
+    env.hosts = [env.host_machine['name'] + ':' +
+                 str(env.host_machine['ssh_port'])]
     env.img_path = os.path.join(env.img_dir, env.img_name)
     env.vd_path = os.path.join(env.img_dir, env.vd_name)
 
     env.db_inst_dir = os.path.join(env.indico_inst_dir, env.db_inst_dirname)
-    env.indico_conf_dir = os.path.join(env.indico_inst_dir, env.indico_conf_dirname)
+    env.indico_conf_dir = os.path.join(env.indico_inst_dir,
+                                       env.indico_conf_dirname)
 
 
 def _update_params(**params):
