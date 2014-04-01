@@ -44,6 +44,7 @@ service iptables restart
 if {postfix}; then
     echo "resolve_numeric_domain = yes" >> /etc/postfix/main.cf
     find_replace /etc/postfix/master.cf ".*      inet  n       -       n       -       -       smtpd" "{smtp_server_port}      inet  n       -       n       -       -       smtpd"
+fi
 for idir in 'archive' 'cache' 'htdocs' 'log' 'tmp'
 do
     semanage fcontext -a -t httpd_sys_content_t "{indico_inst_dir}/$idir(/.*)?"

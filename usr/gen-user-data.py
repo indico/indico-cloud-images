@@ -77,8 +77,8 @@ def config():
         else:
             smtp_server_name = _input_default('Insert the SMTP server name', 'localhost')
         smtp_server_port = _input_default('Insert the SMTP server port', '25')
-        smtp_login = raw_input('Insert the SMTP login')
-        smtp_pswd = raw_input('Insert the SMTP password')
+        smtp_login = raw_input('Insert the SMTP login: ')
+        smtp_pswd = raw_input('Insert the SMTP password: ')
 
         yum_repos_dir = _input_default('Insert the YUM repositories directory', '/etc/yum.repos.d')
         puias_priority = _input_default('Insert the priority for the puias-unsupported repository', '19')

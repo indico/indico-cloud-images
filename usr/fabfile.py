@@ -161,7 +161,7 @@ def start(*what):
     """
 
     if not what:
-        what = ["redis", "db", "httpd"]
+        what = ["redis", "db", "httpd", "postfix"]
 
     for w in what:
         if w == 'redis':
@@ -170,6 +170,8 @@ def start(*what):
             run("zdaemon -C {0} start".format(os.path.join(env.indico_conf_dir, 'zdctl.conf')))
         if w == 'httpd':
             run('service httpd start')
+        if env.postfix and w == 'postfix':
+            run('service postfix start')
 
 
 @task
@@ -179,7 +181,7 @@ def restart(*what):
     """
 
     if not what:
-        what = ["redis", "db", "httpd"]
+        what = ["redis", "db", "httpd", "postfix"]
 
     for w in what:
         if w == 'redis':
@@ -188,3 +190,5 @@ def restart(*what):
             run("zdaemon -C {0} restart".format(os.path.join(env.indico_conf_dir, 'zdctl.conf')))
         if w == 'httpd':
             run('service httpd restart')
+        if env.postfix and w == 'postfix':
+            run('service postfix restart')
