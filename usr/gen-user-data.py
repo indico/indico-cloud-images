@@ -1,7 +1,15 @@
+# compatibility
+from __future__ import print_function
+try:
+    input = raw_input
+except NameError:
+    pass
+
 import argparse
 import os
 import ast
 from fabric.colors import green
+
 
 parser = argparse.ArgumentParser(description='Deploy Indico on the cloud.')
 args = parser.parse_args()
@@ -17,7 +25,7 @@ def _yes_no_input(message, default):
         c = ' [Y/n]? '
     elif default.lower() == 'n':
         c = ' [y/N]? '
-    s = raw_input(message+c) or default
+    s = input(message+c) or default
     if s.lower() == 'y':
         return True
     else:
@@ -25,7 +33,7 @@ def _yes_no_input(message, default):
 
 
 def _input_default(message, default):
-    res = raw_input("{0} [{1}]: ".format(message, default)) or default
+    res = input("{0} [{1}]: ".format(message, default)) or default
     return res
 
 
@@ -63,13 +71,13 @@ def config():
 
         http_port = _input_default('Insert the http port', '80')
         https_port = _input_default('Insert the https port', '443')
-        host_name = raw_input('Insert the hostname: ')
+        host_name = input('Insert the hostname: ')
 
         iptables_path = _input_default('Insert the iptables path', '/etc/sysconfig/iptables')
 
         redis_host = _input_default('Insert the Redis hostname', 'localhost')
         redis_port = _input_default('Insert the Redis port', '6379')
-        redis_pswd = raw_input('Insert the Redis password: ')
+        redis_pswd = input('Insert the Redis password: ')
 
         postfix = _yes_no_input('Do you want to use Postfix as mail server', 'y')
         if postfix:
@@ -77,8 +85,8 @@ def config():
         else:
             smtp_server_name = _input_default('Insert the SMTP server name', 'localhost')
         smtp_server_port = _input_default('Insert the SMTP server port', '25')
-        smtp_login = raw_input('Insert the SMTP login: ')
-        smtp_pswd = raw_input('Insert the SMTP password: ')
+        smtp_login = input('Insert the SMTP login: ')
+        smtp_pswd = input('Insert the SMTP password: ')
 
         yum_repos_dir = _input_default('Insert the YUM repositories directory', '/etc/yum.repos.d')
         puias_priority = _input_default('Insert the priority for the puias-unsupported repository', '19')
@@ -123,12 +131,12 @@ def config():
 
 
 def _gen_file(rules_dict, in_path, out_path):
-    print vrule
-    print "Generating {0}".format(os.path.basename(in_path))
+    print(vrule)
+    print("Generating {0}".format(os.path.basename(in_path)))
     with open(in_path, 'r') as fin:
         with open(out_path, 'w+') as fout:
             fout.write(fin.read().format(**rules_dict))
-    print green("{0} generated".format(os.path.basename(in_path)))
+    print(green("{0} generated".format(os.path.basename(in_path))))
 
 
 def _gen_indico_httpd_conf(conf_dict):
@@ -275,14 +283,14 @@ def _gen_config_files(conf_dict):
 def main():
     conf_dict = config()
     mime_path = _input_default('Choose a path for the MIME file', "user-data")
-    print '---------- Starting MIME file generation ----------'
+    print('---------- Starting MIME file generation ----------')
     _gen_config_files(conf_dict)
     os.system("./write-mime-multipart --output {0}".format(mime_path)
               + " {0}".format(os.path.join(conf_dir, 'user-data-script.sh'))
               + " {0}".format(os.path.join(conf_dir, 'cloud-config'))
               )
-    print vrule
-    print green('--------------- MIME file generated ---------------')
+    print(vrule)
+    print(green('--------------- MIME file generated ---------------'))
 
 
 if __name__ == '__main__':
