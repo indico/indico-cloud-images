@@ -7,9 +7,9 @@ except NameError:
 
 import argparse
 import os
-import ast
-from fabric.colors import green
 
+from fabric.colors import green
+from yaml import dump, load
 
 parser = argparse.ArgumentParser(description='Deploy Indico on the cloud.')
 args = parser.parse_args()
@@ -50,8 +50,8 @@ def _add_tabs(old_content):
 def config():
     if _yes_no_input('Do you want to use a configuration file', 'n'):
         conf_path = _input_default('Specify the configuration file path', 'gen-user-data.conf')
-        with open(conf_path) as f:
-            conf_dict = ast.literal_eval(f.read())
+        with open(conf_path, 'r') as f:
+            conf_dict = load(f)
     else:
         indico_inst_dir = _input_default('Insert the Indico installation directory path', '/opt/indico')
         db_inst_dir = _input_default('Insert the Indico DB installation directory path', '/opt/indico/db')
@@ -124,8 +124,8 @@ def config():
             if (not os.path.exists(d)) & (d != ''):
                 os.makedirs(d)
 
-            with open(conf_path, 'w+') as f:
-                f.write(str(conf_dict))
+            with open(conf_path, 'w') as f:
+                dump(conf_dict, f, default_flow_style=False)
 
     return conf_dict
 
