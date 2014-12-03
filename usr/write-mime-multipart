@@ -4,12 +4,8 @@
 
 import os
 import sys
-import smtplib
-# For guessing MIME type based on file name extension
-import mimetypes
 
 from email import encoders
-from email.message import Message
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -20,46 +16,45 @@ from base64 import b64encode
 
 COMMASPACE = ', '
 
-starts_with_mappings={
-    '#include' : 'text/x-include-url',
-    '#!' : 'text/x-shellscript',
-    '#cloud-config' : 'text/cloud-config',
-    '#upstart-job'  : 'text/upstart-job',
-    '#part-handler' : 'text/part-handler',
-    '#cloud-boothook' : 'text/cloud-boothook'
+starts_with_mappings = {
+    '#include': 'text/x-include-url',
+    '#!': 'text/x-shellscript',
+    '#cloud-config': 'text/cloud-config',
+    '#upstart-job': 'text/upstart-job',
+    '#part-handler': 'text/part-handler',
+    '#cloud-boothook': 'text/cloud-boothook'
 }
 
-def get_type(fname,deftype):
-    f = file(fname,"rb")
-    line = f.readline()
-    f.close()
+
+def get_type(fname, deftype):
+    with open(fname, "rb") as f:
+        line = f.readline()
+
     rtype = deftype
-    for str,mtype in starts_with_mappings.items():
-        if line.startswith(str):
+    for key, mtype in starts_with_mappings.items():
+        if line.startswith(key):
             rtype = mtype
             break
-    return(rtype)
+
+    return rtype
+
 
 def main():
     outer = MIMEMultipart()
-    #outer['Subject'] = 'Contents of directory %s' % os.path.abspath(directory)
-    #outer['To'] = COMMASPACE.join(opts.recipients)
-    #outer['From'] = opts.sender
-    #outer.preamble = 'You will not see this in a MIME-aware mail reader.\n'
 
     parser = OptionParser()
-    
+
     parser.add_option("-o", "--output", dest="output",
-        help="write output to FILE [default %default]", metavar="FILE", 
-        default="-")
+                      help="write output to FILE [default %default]", metavar="FILE",
+                      default="-")
     parser.add_option("-z", "--gzip", dest="compress", action="store_true",
-        help="compress output", default=False)
+                      help="compress output", default=False)
     parser.add_option("-d", "--default", dest="deftype",
-        help="default mime type [default %default]", default="text/plain")
+                      help="default mime type [default %default]", default="text/plain")
     parser.add_option("--delim", dest="delim",
-        help="delimiter [default %default]", default=":")
+                      help="delimiter [default %default]", default=":")
     parser.add_option("-b", "--base64", dest="base64", action="store_true",
-        help="encode content base64", default=False)
+                      help="encode content base64", default=False)
 
     (options, args) = parser.parse_args()
 
@@ -68,11 +63,13 @@ def main():
 
     for arg in args:
         t = arg.split(options.delim, 1)
-        path=t[0]
+        path = t[0]
+
         if len(t) > 1:
+            # explicit type was set
             mtype = t[1]
         else:
-            mtype = get_type(path,options.deftype)
+            mtype = get_type(path, options.deftype)
 
         maintype, subtype = mtype.split('/', 1)
         if maintype == 'text':
@@ -81,31 +78,31 @@ def main():
             msg = MIMEText(fp.read(), _subtype=subtype)
             fp.close()
         else:
-            fp = open(path, 'rb')
-            msg = MIMEBase(maintype, subtype)
-            msg.set_payload(fp.read())
-            fp.close()
+            with open(path, 'rb') as fp:
+                msg = MIMEBase(maintype, subtype)
+                msg.set_payload(fp.read())
+
             # Encode the payload using Base64
             encoders.encode_base64(msg)
 
         # Set the filename parameter
         msg.add_header('Content-Disposition', 'attachment',
-            filename=os.path.basename(path))
+                       filename=os.path.basename(path))
 
         outer.attach(msg)
 
-    if options.output is "-":
+    if options.output == "-":
         ofile = sys.stdout
     else:
-        ofile = file(options.output,"wb")
-    
+        ofile = open(options.output, "wb")
+
     if options.base64:
         output = b64encode(outer.as_string())
     else:
         output = outer.as_string()
-        
+
     if options.compress:
-        gfile = gzip.GzipFile(fileobj=ofile, filename = options.output )
+        gfile = gzip.GzipFile(fileobj=ofile, filename=options.output)
         gfile.write(output)
         gfile.close()
     else:
