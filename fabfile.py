@@ -2,9 +2,9 @@ import os
 import sys
 from contextlib import contextmanager
 
-from fabric.api import *
+from fabric.api import env, prefix, task, settings
 from fabric.contrib.files import sed
-from fabric.operations import put, run
+from fabric.operations import put, run, sudo
 from fabric.colors import red
 
 
@@ -106,7 +106,12 @@ def _service_action(services, action):
                 run("zdaemon -C {} {}".format(os.path.join(env.indico_conf_dir, 'zdctl.conf'), action))
         elif svc == 'scheduler':
             with virtualenv():
-                sudo("indico_scheduler {}".format(action), user="apache")
+                if action in ['start', 'restart']:
+                    with settings(shell='/bin/bash -c'):
+                            sudo("nohup indico_scheduler {} > /dev/null".format(action), user="apache")
+                else:
+                    sudo("indico_scheduler {}".format(action))
+
         elif svc == 'httpd':
             run('service httpd {}'.format(action))
         else:
