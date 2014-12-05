@@ -1,28 +1,15 @@
 user = "root"
 
 machine = {
-    "name": 'indico-cloud-test.cern.ch',
-    "ssh_port": 22,
-    "http_port": 80,
-    "https_port": 443
+    "name": 'your-test-server',
+    "ssh_port": 22
 }
-
-redis_host = "localhost"
-redis_pswd = "redispassw0rd"
-redis_port = 6379
-
-postfix = True
-smtp_server_name = "localhost"
-smtp_server_port = 25
-smtp_login = ""
-smtp_pswd = ""
 
 indico_inst_dir = "/opt/indico"
 indico_conf_dirname = "etc"
 
 httpd_conf_dir = "/etc/httpd/conf"
 httpd_confd_dir = "/etc/httpd/conf.d"
-iptables_dir = "/etc/sysconfig"
 
 ssl_certs_dir = "/etc/ssl/certs/"
 ssl_private_dir = "/etc/ssl/private/"

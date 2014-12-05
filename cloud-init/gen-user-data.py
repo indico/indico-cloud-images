@@ -55,14 +55,14 @@ def config():
     ssl_private_dir = _input_default('Insert the SSL private directory', '/etc/ssl/private')
     load_ssl = _yes_no_input('Do you want to load a personal SSL certificate', 'n')
     if load_ssl:
-        pem_source = _input_default('Insert the source (local) path to the .pem file', 'ssl/certs/ssl-cert-snakeoil.pem')
-        key_source = _input_default('Insert the source (local) path to the .key file', 'ssl/private/ssl-cert-snakeoil.key')
+        pem_source = _input_default('Insert the source (local) path to the .pem file',
+                                    'ssl/certs/ssl-cert-snakeoil.pem')
+        key_source = _input_default('Insert the source (local) path to the .key file',
+                                    'ssl/private/ssl-cert-snakeoil.key')
     else:
         pem_source = 'self-gen.pem'
         key_source = 'self-gen.key'
 
-    http_port = _input_default('Insert the http port', '80')
-    https_port = _input_default('Insert the https port', '443')
     host_name = input('Insert the hostname: ')
 
     iptables_path = _input_default('Insert the iptables path', '/etc/sysconfig/iptables')
@@ -93,8 +93,6 @@ def config():
         'load_ssl': load_ssl,
         'pem_source': pem_source,
         'key_source': key_source,
-        'http_port': http_port,
-        'https_port': https_port,
         'host_name': host_name,
         'iptables_path': iptables_path,
         'redis_host': redis_host,
@@ -134,8 +132,6 @@ def _gen_indico_httpd_conf(conf_dict):
     in_path = os.path.join(tpl_dir, 'indico_httpd.conf')
     out_path = os.path.join(conf_dir, 'indico_httpd.conf')
     rules_dict = {
-        'virtualhost_http_port': "<VirtualHost *:{0}>".format(conf_dict['http_port']),
-        'virtualhost_https_port': "<VirtualHost *:{0}>".format(conf_dict['https_port']),
         'indico_inst_dir': conf_dict['indico_inst_dir'],
         'ssl_pem_path': os.path.join(conf_dict['ssl_certs_dir'], os.path.basename(conf_dict['pem_source'])),
         'ssl_key_path': os.path.join(conf_dict['ssl_private_dir'], os.path.basename(conf_dict['key_source']))
@@ -145,8 +141,6 @@ def _gen_indico_httpd_conf(conf_dict):
 
 
 def _gen_indico_indico_conf(conf_dict):
-    http = ':{0}'.format(conf_dict['http_port']) if conf_dict['http_port'] is not '80' else ''
-    https = ':{0}'.format(conf_dict['https_port']) if conf_dict['https_port'] is not '443' else ''
     in_path = os.path.join(tpl_dir, 'indico_indico.conf')
     out_path = os.path.join(conf_dir, 'indico_indico.conf')
     rules_dict = {
@@ -154,8 +148,6 @@ def _gen_indico_indico_conf(conf_dict):
         'redis_host': conf_dict['redis_host'],
         'redis_port': conf_dict['redis_port'],
         'host_name': conf_dict['host_name'],
-        'http': http,
-        'https': https,
         'indico_inst_dir': conf_dict['indico_inst_dir'],
         'smtp_server_name': conf_dict['smtp_server_name'],
         'smtp_server_port': conf_dict['smtp_server_port'],
@@ -203,8 +195,6 @@ def _gen_script(conf_dict):
         'ssl_pem_filename': os.path.basename(conf_dict['pem_source']),
         'ssl_key_filename': os.path.basename(conf_dict['key_source']),
         'iptables_path': conf_dict['iptables_path'],
-        'http_port': conf_dict['http_port'],
-        'https_port': conf_dict['https_port'],
         'postfix': str(conf_dict['postfix']).lower(),
         'smtp_server_port': conf_dict['smtp_server_port']
     }
@@ -239,8 +229,6 @@ def _gen_cloud_config(conf_dict):
         indico_indico_conf_content = _add_tabs(f.read())
     with open(os.path.join(conf_dir, 'redis.conf'), 'r') as f:
         redis_conf_content = _add_tabs(f.read())
-    with open(os.path.join(conf_dir, 'ssl.conf'), 'r') as f:
-        ssl_conf_content = _add_tabs(f.read())
 
     ssl_files = ''
     if conf_dict['load_ssl']:
@@ -255,7 +243,6 @@ def _gen_cloud_config(conf_dict):
         'indico_httpd_conf_content': indico_httpd_conf_content,
         'indico_indico_conf_content': indico_indico_conf_content,
         'redis_conf_content': redis_conf_content,
-        'ssl_conf_content': ssl_conf_content,
         'ssl_files': ssl_files
     }
 

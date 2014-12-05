@@ -13,7 +13,4 @@ write_files:
 -   content: |
 {redis_conf_content}
     path: /redis.conf
--   content: |
-{ssl_conf_content}
-    path: /ssl.conf
 {ssl_files}

@@ -38,8 +38,10 @@ else
     mv -f /{ssl_pem_filename} {ssl_certs_dir}/{ssl_pem_filename}
     mv -f /{ssl_key_filename} {ssl_private_dir}/{ssl_key_filename}
 fi
-add_line {iptables_path} 11 "-A INPUT -m state --state NEW -m tcp -p tcp --dport {http_port} -j ACCEPT"
-add_line {iptables_path} 12 "-A INPUT -m state --state NEW -m tcp -p tcp --dport {https_port} -j ACCEPT"
+
+# Set up iptables
+add_line {iptables_path} 11 "-A INPUT -m state --state NEW -m tcp -p tcp --dport 80 -j ACCEPT"
+add_line {iptables_path} 12 "-A INPUT -m state --state NEW -m tcp -p tcp --dport 443 -j ACCEPT"
 service iptables restart
 if {postfix}; then
     echo "resolve_numeric_domain = yes" >> /etc/postfix/main.cf
