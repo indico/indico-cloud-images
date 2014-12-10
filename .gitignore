@@ -1,0 +1,10 @@
+*.pyc
+
+conf/*.conf
+conf/cloud-config
+conf/*.sh
+
+dev/init.iso
+
+fabfile.conf
+gen-user-data.conf
