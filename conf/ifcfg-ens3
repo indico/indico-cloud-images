@@ -1,0 +1,5 @@
+DEVICE=ens3
+BOOTPROTO=dhcp
+NM_CONTROLLED=no
+ONBOOT=yes
+TYPE=Ethernet

@@ -7,8 +7,9 @@ except NameError:
 
 import argparse
 import os
+import re
 
-from fabric.colors import cyan, green
+from fabric.colors import cyan, green, red
 from yaml import dump, load
 
 
@@ -44,6 +45,16 @@ def _add_tabs(old_content):
     return new_content
 
 
+def _get_ssh_key(fname):
+    with open(fname, 'r') as f:
+        data = f.read().strip()
+        if re.match(r'^ssh-\w+ [a-zA-Z0-9+/]+={0,2} \w+@\w+$', data):
+            return data
+        else:
+            print(red("Key in '{0}' doesn't seem to be valid! It will be ignored.".format(fname)))
+            return None
+
+
 def config():
     indico_inst_dir = _input_default('Insert the Indico installation directory path', '/opt/indico')
     db_inst_dir = _input_default('Insert the Indico DB installation directory path', '/opt/indico/db')
@@ -63,9 +74,9 @@ def config():
         pem_source = 'self-gen.pem'
         key_source = 'self-gen.key'
 
+    enable_networking = _yes_no_input(
+        'Do you want to enable networking on the machine (not needed for cloud deployment)', 'y')
     host_name = input('Insert the hostname: ')
-
-    iptables_path = _input_default('Insert the iptables path', '/etc/sysconfig/iptables')
 
     redis_host = _input_default('Insert the Redis hostname', 'localhost')
     redis_port = _input_default('Insert the Redis port', '6379')
@@ -80,11 +91,9 @@ def config():
     smtp_login = input('Insert the SMTP login: ')
     smtp_pswd = input('Insert the SMTP password: ')
 
-    yum_repos_dir = _input_default('Insert the YUM repositories directory', '/etc/yum.repos.d')
-    puias_priority = _input_default('Insert the priority for the puias-unsupported repository', '19')
-
     conf_dict = {
         'indico_inst_dir': indico_inst_dir,
+        'enable_networking': enable_networking,
         'db_inst_dir': db_inst_dir,
         'httpd_conf_dir': httpd_conf_dir,
         'httpd_confd_dir': httpd_confd_dir,
@@ -94,12 +103,9 @@ def config():
         'pem_source': pem_source,
         'key_source': key_source,
         'host_name': host_name,
-        'iptables_path': iptables_path,
         'redis_host': redis_host,
         'redis_port': redis_port,
         'redis_pswd': redis_pswd,
-        'yum_repos_dir': yum_repos_dir,
-        'puias_priority': puias_priority,
         'postfix': postfix,
         'smtp_server_name': smtp_server_name,
         'smtp_server_port': smtp_server_port,
@@ -169,22 +175,11 @@ def _gen_redis_conf(conf_dict):
     _gen_file(rules_dict, in_path, out_path)
 
 
-def _gen_puias_repo(conf_dict):
-    in_path = os.path.join(tpl_dir, 'puias.repo')
-    out_path = os.path.join(conf_dir, 'puias.repo')
-    rules_dict = {
-        'puias_priority': conf_dict['puias_priority']
-    }
-
-    _gen_file(rules_dict, in_path, out_path)
-
-
 def _gen_script(conf_dict):
     in_path = os.path.join(tpl_dir, 'user-data-script.sh')
     out_path = os.path.join(conf_dir, 'user-data-script.sh')
     rules_dict = {
         'indico_inst_dir': conf_dict['indico_inst_dir'],
-        'yum_repos_dir': conf_dict['yum_repos_dir'],
         'db_inst_dir': conf_dict['db_inst_dir'],
         'httpd_conf_dir': conf_dict['httpd_conf_dir'],
         'httpd_confd_dir': conf_dict['httpd_confd_dir'],
@@ -194,9 +189,9 @@ def _gen_script(conf_dict):
         'load_ssl': str(conf_dict['load_ssl']).lower(),
         'ssl_pem_filename': os.path.basename(conf_dict['pem_source']),
         'ssl_key_filename': os.path.basename(conf_dict['key_source']),
-        'iptables_path': conf_dict['iptables_path'],
         'postfix': str(conf_dict['postfix']).lower(),
-        'smtp_server_port': conf_dict['smtp_server_port']
+        'smtp_server_port': conf_dict['smtp_server_port'],
+        'enable_networking': str(conf_dict['enable_networking']).lower()
     }
 
     _gen_file(rules_dict, in_path, out_path)
@@ -221,29 +216,38 @@ def _gen_cloud_config_ssl(conf_dict):
 
 
 def _gen_cloud_config(conf_dict):
-    with open(os.path.join(conf_dir, 'puias.repo'), 'r') as f:
-        puias_repo_content = _add_tabs(f.read())
-    with open(os.path.join(conf_dir, 'indico_httpd.conf'), 'r') as f:
-        indico_httpd_conf_content = _add_tabs(f.read())
-    with open(os.path.join(conf_dir, 'indico_indico.conf'), 'r') as f:
-        indico_indico_conf_content = _add_tabs(f.read())
-    with open(os.path.join(conf_dir, 'redis.conf'), 'r') as f:
-        redis_conf_content = _add_tabs(f.read())
+    content = {}
 
-    ssl_files = ''
+    for fname in ['indico_httpd.conf', 'indico_indico.conf', 'redis.conf', 'ifcfg-ens3']:
+        with open(os.path.join(conf_dir, fname), 'r') as f:
+            content[fname] = _add_tabs(f.read())
+
     if conf_dict['load_ssl']:
         _gen_cloud_config_ssl(conf_dict)
         with open(os.path.join(conf_dir, 'cloud-config-ssl'), 'r') as f:
             ssl_files = f.read()
+    else:
+        ssl_files = ''
+
+    key_list = conf_dict.get('ssh_keys', [])
+    password = conf_dict.get('password')
+
+    ssh_key_data = '\n'.join('  - {0}'.format(key) for key in (_get_ssh_key(k) for k in key_list) if key is not None)
+
+    if ssh_key_data:
+        ssh_key_data = "ssh_authorized_keys:\n{0}".format(ssh_key_data)
 
     in_path = os.path.join(tpl_dir, 'cloud-config')
     out_path = os.path.join(conf_dir, 'cloud-config')
+
     rules_dict = {
-        'puias_repo_content': puias_repo_content,
-        'indico_httpd_conf_content': indico_httpd_conf_content,
-        'indico_indico_conf_content': indico_indico_conf_content,
-        'redis_conf_content': redis_conf_content,
-        'ssl_files': ssl_files
+        'indico_httpd_conf_content': content['indico_httpd.conf'],
+        'indico_indico_conf_content': content['indico_indico.conf'],
+        'redis_conf_content': content['redis.conf'],
+        'ifcfg_ens3_content': content['ifcfg-ens3'],
+        'ssl_files': ssl_files,
+        'ssh_key_data': ssh_key_data,
+        'password': 'password: {0}'.format(password) if password else ''
     }
 
     _gen_file(rules_dict, in_path, out_path)
@@ -253,7 +257,6 @@ def _gen_config_files(conf_dict):
     _gen_indico_httpd_conf(conf_dict)
     _gen_indico_indico_conf(conf_dict)
     _gen_redis_conf(conf_dict)
-    _gen_puias_repo(conf_dict)
     _gen_script(conf_dict)
     _gen_cloud_config(conf_dict)
 

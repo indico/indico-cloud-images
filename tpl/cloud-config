@@ -1,9 +1,12 @@
 #cloud-config
 
+{ssh_key_data}
+{password}
+
 write_files:
 -   content: |
-{puias_repo_content}
-    path: /puias.repo
+{ifcfg_ens3_content}
+    path: /ifcfg-ens3
 -   content: |
 {indico_httpd_conf_content}
     path: /indico_httpd.conf

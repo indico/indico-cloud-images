@@ -1,12 +1,22 @@
 #!/bin/bash
 
+echo "indico-cloud-init: start config"
+
 function find_replace(){{
     sed -i.bak -r -e "s|$2|$3|g" $1
 }}
 
-function add_line(){{
-    sed -i.bak -r -e "$2 i\\$3" $1
-}}
+if {enable_networking}; then
+    # Enable networking (CentOS 7 cloud images)
+    mv /ifcfg-ens3 /etc/sysconfig/network-scripts/ifcfg-ens3
+    service network restart
+fi
+
+# Install EPEL 7 (needed for Redis)
+yum -y install wget
+wget http://dl.fedoraproject.org/pub/epel/7/x86_64/e/epel-release-7-2.noarch.rpm
+rpm -Uvh epel-release-7*.rpm
+rm epel-release-7*.rpm
 
 touch /etc/sudoers.tmp
 cp /etc/sudoers /tmp/sudoers.new
@@ -18,7 +28,7 @@ fi
 rm /etc/sudoers.tmp
 
 # Install RHEL/CentOS dependencies
-yum -y install python-devel python-virtualenv gcc httpd mod_wsgi python-reportlab python-imaging mod_ssl redis openldap-devel libffi-devel libxml-devl libxslt-devel
+yum -y install iptables-services python-devel python-virtualenv gcc httpd mod_wsgi python-reportlab python-imaging mod_ssl redis openldap-devel libffi-devel libxml-devel libxslt-devel
 
 # Create Indico base dir
 mkdir -p {indico_inst_dir}
@@ -52,8 +62,11 @@ else
 fi
 
 # Set up iptables
-add_line {iptables_path} 11 "-A INPUT -m state --state NEW -m tcp -p tcp --dport 80 -j ACCEPT"
-add_line {iptables_path} 12 "-A INPUT -m state --state NEW -m tcp -p tcp --dport 443 -j ACCEPT"
+iptables -A INPUT -p tcp -m tcp --dport 22 -j ACCEPT
+iptables -A INPUT -p tcp -m tcp --dport 80 -j ACCEPT
+iptables -A INPUT -p tcp -m tcp --dport 443 -j ACCEPT
+
+service iptables save
 service iptables restart
 
 # Setup postfix if needed
@@ -89,3 +102,5 @@ if [ "$?" -eq "0" ]; then
     cp /tmp/sudoers.new /etc/sudoers
 fi
 rm /etc/sudoers.tmp
+
+echo "indico-cloud-init: config done"
