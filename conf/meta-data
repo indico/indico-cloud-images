@@ -1,2 +1,2 @@
 instance-id: iid-local01
-local-hostname: myhost
+local-hostname: indico-test-vm
