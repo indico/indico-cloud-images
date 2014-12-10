@@ -27,8 +27,7 @@ debug_vm = False
 use_ssh_config = True
 
 
-conf_dir = "../conf"
-tpl_dir = "../tpl"
+conf_dir = "./conf"
 img_dir = "."
 img_name = "CentOS-7-x86_64-GenericCloud.qcow2"
 vd_name = "init.iso"

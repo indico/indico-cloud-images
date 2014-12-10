@@ -35,6 +35,35 @@ $ nova boot --image 'bfa5783c-e40e-4668-adc1-feb0ae3d7a46' --key-name your-nova-
 
 `indico-cloud-test` being the chosen hostname for the Indico server.
 
+## Creating your own image
+
+If you want to create your own image for testing purposes, you can do so by using the fabric script located under `dev`.
+You should first have created a valid `user-data` file. It is important to include some extra information, such as a password for the default user (and an optional ssh key if you'd like). Networking should be enabled, so that the image can be accessed from outside QEMU/KVM:
+
+```yaml
+ssh_keys:
+    - /home/jdoe/.ssh/id_rsa.pub
+password: some_password
+enable_networking: true
+```
+
+That said, you will also have to customize `dev/fabfile.conf`, namely:
+
+```python
+user = 'centos'
+password = 'some_password'
+img_name = "CentOS-7-x86_64-GenericCloud.qcow2"
+```
+
+In order to make sure that the default user and password are set and that the image file corresponds to what you have downloaded.
+Then just do:
+
+```console
+$ fab create_vm_image
+```
+
+And wait till the program exits. You can check `qemu-output.log` in order to get some more debug data.
+
 ## Managing the server
 
 Once you have a server deployed, you will probably want to start the database, the web server and the scheduler. Fortunately, we provide a fabric script that allows you to exactly that. You will need to set up a small config file based on `fabfile.conf.sample`. Normally, you will only need to change this part:

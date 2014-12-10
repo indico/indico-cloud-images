@@ -166,7 +166,7 @@ def launch_vm(**params):
 
 
 @task
-def config_no_cloud(**params):
+def config_no_cloud(user_data, **params):
     """
     cloud-init no-cloud fake config
     """
@@ -174,7 +174,7 @@ def config_no_cloud(**params):
     _update_params(**params)
 
     local("mkisofs -output {0} -volid cidata -joliet -rock {1} {2}"
-          .format(env.vd_path, os.path.join(env.conf_dir, 'user-data'),
+          .format(env.vd_path, user_data,
                   os.path.join(env.conf_dir, 'meta-data')))
 
 
@@ -197,11 +197,11 @@ def run_vm_debug(**params):
 
 
 @task
-def create_vm_img(**params):
+def create_vm_img(user_data, **params):
     """
     Creates a Virtual Image ready to be deployed on the cloud
     """
 
-    config_no_cloud(**params)
+    config_no_cloud(user_data, **params)
     launch_vm(**params)
     cleanup_vm()

@@ -1,8 +1,6 @@
 *.pyc
 
-conf/*.conf
-conf/cloud-config
-conf/*.sh
+build/*
 
 dev/init.iso
 

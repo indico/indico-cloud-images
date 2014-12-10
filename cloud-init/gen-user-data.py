@@ -13,8 +13,7 @@ from fabric.colors import cyan, green, red
 from yaml import dump, load
 
 
-conf_dir = '../conf'
-tpl_dir = '../tpl'
+tpl_dir = './tpl'
 
 
 def _yes_no_input(message, default):
@@ -35,6 +34,11 @@ def _input_default(message, default):
     return res
 
 
+def _read_file(fname):
+    with open(fname, 'r') as f:
+        return f.read()
+
+
 def _add_tabs(old_content):
     new_content = ''
     for line in old_content.splitlines(True):
@@ -46,13 +50,12 @@ def _add_tabs(old_content):
 
 
 def _get_ssh_key(fname):
-    with open(fname, 'r') as f:
-        data = f.read().strip()
-        if re.match(r'^ssh-\w+ [a-zA-Z0-9+/]+={0,2} \w+@\w+$', data):
-            return data
-        else:
-            print(red("Key in '{0}' doesn't seem to be valid! It will be ignored.".format(fname)))
-            return None
+    data = _read_file(fname).strip()
+    if re.match(r'^ssh-\w+ [a-zA-Z0-9+/]+={0,2} \w+@\w+$', data):
+        return data
+    else:
+        print(red("Key in '{0}' doesn't seem to be valid! It will be ignored.".format(fname)))
+        return None
 
 
 def config():
@@ -136,7 +139,7 @@ def _gen_file(rules_dict, in_path, out_path):
 
 def _gen_indico_httpd_conf(conf_dict):
     in_path = os.path.join(tpl_dir, 'indico_httpd.conf')
-    out_path = os.path.join(conf_dir, 'indico_httpd.conf')
+    out_path = os.path.join(conf_dict['build_dir'], 'indico_httpd.conf')
     rules_dict = {
         'indico_inst_dir': conf_dict['indico_inst_dir'],
         'ssl_pem_path': os.path.join(conf_dict['ssl_certs_dir'], os.path.basename(conf_dict['pem_source'])),
@@ -148,7 +151,7 @@ def _gen_indico_httpd_conf(conf_dict):
 
 def _gen_indico_indico_conf(conf_dict):
     in_path = os.path.join(tpl_dir, 'indico_indico.conf')
-    out_path = os.path.join(conf_dir, 'indico_indico.conf')
+    out_path = os.path.join(conf_dict['build_dir'], 'indico_indico.conf')
     rules_dict = {
         'redis_pswd': conf_dict['redis_pswd'],
         'redis_host': conf_dict['redis_host'],
@@ -166,7 +169,7 @@ def _gen_indico_indico_conf(conf_dict):
 
 def _gen_redis_conf(conf_dict):
     in_path = os.path.join(tpl_dir, 'redis.conf')
-    out_path = os.path.join(conf_dir, 'redis.conf')
+    out_path = os.path.join(conf_dict['build_dir'], 'redis.conf')
     rules_dict = {
         'redis_pswd': conf_dict['redis_pswd'],
         'redis_port': conf_dict['redis_port']
@@ -177,7 +180,7 @@ def _gen_redis_conf(conf_dict):
 
 def _gen_script(conf_dict):
     in_path = os.path.join(tpl_dir, 'user-data-script.sh')
-    out_path = os.path.join(conf_dir, 'user-data-script.sh')
+    out_path = os.path.join(conf_dict['build_dir'], 'user-data-script.sh')
     rules_dict = {
         'indico_inst_dir': conf_dict['indico_inst_dir'],
         'db_inst_dir': conf_dict['db_inst_dir'],
@@ -204,7 +207,7 @@ def _gen_cloud_config_ssl(conf_dict):
         key_content = _add_tabs(f.read())
 
     in_path = os.path.join(tpl_dir, 'cloud-config-ssl')
-    out_path = os.path.join(conf_dir, 'cloud-config-ssl')
+    out_path = os.path.join(conf_dict['build_dir'], 'cloud-config-ssl')
     rules_dict = {
         'pem_content': pem_content,
         'pem_filename': os.path.basename(conf_dict['pem_source']),
@@ -218,14 +221,14 @@ def _gen_cloud_config_ssl(conf_dict):
 def _gen_cloud_config(conf_dict):
     content = {}
 
-    for fname in ['indico_httpd.conf', 'indico_indico.conf', 'redis.conf', 'ifcfg-ens3']:
-        with open(os.path.join(conf_dir, fname), 'r') as f:
-            content[fname] = _add_tabs(f.read())
+    for fname in ['indico_httpd.conf', 'indico_indico.conf', 'redis.conf']:
+        content[fname] = _add_tabs(_read_file(os.path.join(conf_dict['build_dir'], fname)))
+
+    content['ifcfg-ens3'] = _add_tabs(_read_file(os.path.join(tpl_dir, 'ifcfg-ens3')))
 
     if conf_dict['load_ssl']:
         _gen_cloud_config_ssl(conf_dict)
-        with open(os.path.join(conf_dir, 'cloud-config-ssl'), 'r') as f:
-            ssl_files = f.read()
+        ssl_files = _read_file(os.path.join(conf_dict['build_dir'], 'cloud-config-ssl'))
     else:
         ssl_files = ''
 
@@ -238,7 +241,7 @@ def _gen_cloud_config(conf_dict):
         ssh_key_data = "ssh_authorized_keys:\n{0}".format(ssh_key_data)
 
     in_path = os.path.join(tpl_dir, 'cloud-config')
-    out_path = os.path.join(conf_dir, 'cloud-config')
+    out_path = os.path.join(conf_dict['build_dir'], 'cloud-config')
 
     rules_dict = {
         'indico_httpd_conf_content': content['indico_httpd.conf'],
@@ -276,8 +279,8 @@ def main():
 
     _gen_config_files(conf_dict)
     os.system("./write-mime-multipart --output {0}".format(args.output)
-              + " {0}".format(os.path.join(conf_dir, 'user-data-script.sh'))
-              + " {0}".format(os.path.join(conf_dir, 'cloud-config'))
+              + " {0}".format(os.path.join(conf_dict['build_dir'], 'user-data-script.sh'))
+              + " {0}".format(os.path.join(conf_dict['build_dir'], 'cloud-config'))
               )
     print(green("Wrote '{}'.".format(args.output)))
 
