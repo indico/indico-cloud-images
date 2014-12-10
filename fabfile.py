@@ -10,7 +10,7 @@ from fabric.colors import red
 
 @contextmanager
 def virtualenv():
-    with prefix('source {}/bin/activate'.format(os.path.join(env.indico_dir, env.virtualenv_dirname))):
+    with prefix('source {0}/bin/activate'.format(os.path.join(env.indico_dir, env.virtualenv_dirname))):
         yield
 
 
@@ -76,9 +76,9 @@ def update_server(**params):
     sed(os.path.join(env.httpd_conf_dir, 'httpd.conf'),
         '^ServerName.*', "ServerName {0}".format(env.machine['name']))
 
-    sed(indico_conf, '^BaseURL.*', 'BaseURL = "http://{}"'.format(env.machine['name']))
-    sed(indico_conf, '^BaseSecureURL.*', 'BaseSecureURL = "https://{}"'.format(env.machine['name']))
-    sed(indico_conf, '^LoginURL.*', 'LoginURL = "https://{}/user/login"'.format(env.machine['name']))
+    sed(indico_conf, '^BaseURL.*', 'BaseURL = "http://{0}"'.format(env.machine['name']))
+    sed(indico_conf, '^BaseSecureURL.*', 'BaseSecureURL = "https://{0}"'.format(env.machine['name']))
+    sed(indico_conf, '^LoginURL.*', 'LoginURL = "https://{0}/user/login"'.format(env.machine['name']))
 
 
 @task
@@ -100,22 +100,22 @@ def _service_action(services, action):
 
     for svc in services:
         if svc == 'redis':
-            run('service redis {}'.format(action))
+            run('service redis {0}'.format(action))
         elif svc == 'db':
             with virtualenv():
-                run("zdaemon -C {} {}".format(os.path.join(env.indico_conf_dir, 'zdctl.conf'), action))
+                run("zdaemon -C {0} {1}".format(os.path.join(env.indico_conf_dir, 'zdctl.conf'), action))
         elif svc == 'scheduler':
             with virtualenv():
                 if action in ['start', 'restart']:
                     with settings(shell='/bin/bash -c'):
-                            sudo("nohup indico_scheduler {} > /dev/null".format(action), user="apache")
+                            sudo("nohup indico_scheduler {0} > /dev/null".format(action), user="apache")
                 else:
-                    sudo("indico_scheduler {}".format(action))
+                    sudo("indico_scheduler {0}".format(action))
 
         elif svc == 'httpd':
-            run('service httpd {}'.format(action))
+            run('service httpd {0}'.format(action))
         else:
-            print red("Unknown service: {}".format(svc))
+            print red("Unknown service: {0}".format(svc))
             sys.exit(1)
 
 

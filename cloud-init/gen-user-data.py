@@ -287,7 +287,7 @@ def main():
               + " {0}".format(os.path.join(conf_dict['build_dir'], 'user-data-script.sh'))
               + " {0}".format(os.path.join(conf_dict['build_dir'], 'cloud-config'))
               )
-    print(green("Wrote '{}'.".format(args.output)))
+    print(green("Wrote '{0}'.".format(args.output)))
 
 
 if __name__ == '__main__':
