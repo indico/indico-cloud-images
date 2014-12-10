@@ -59,6 +59,11 @@ def _get_ssh_key(fname):
 
 
 def config():
+    # Interactive setup, so let's assume build dir to be ../build
+    conf_dict = {
+        'build_dir': '../build'
+    }
+
     indico_inst_dir = _input_default('Insert the Indico installation directory path', '/opt/indico')
     db_inst_dir = _input_default('Insert the Indico DB installation directory path', '/opt/indico/db')
 
@@ -94,7 +99,7 @@ def config():
     smtp_login = input('Insert the SMTP login: ')
     smtp_pswd = input('Insert the SMTP password: ')
 
-    conf_dict = {
+    conf_dict.update({
         'indico_inst_dir': indico_inst_dir,
         'enable_networking': enable_networking,
         'db_inst_dir': db_inst_dir,
@@ -114,7 +119,7 @@ def config():
         'smtp_server_port': smtp_server_port,
         'smtp_login': smtp_login,
         'smtp_pswd': smtp_pswd
-    }
+    })
 
     if _yes_no_input('Do you want to generate a configuration file from these data?', 'y'):
         conf_path = _input_default('Specify the configuration file path', 'gen-user-data.conf')
