@@ -255,7 +255,11 @@ def _gen_cloud_config(conf_dict):
         'ifcfg_ens3_content': content['ifcfg-ens3'],
         'ssl_files': ssl_files,
         'ssh_key_data': ssh_key_data,
-        'password': 'password: {0}'.format(password) if password else ''
+        'password': """password: {0}
+chpasswd:
+  - expire: False
+ssh_pwauth: True
+""".format(password) if password else ''
     }
 
     _gen_file(rules_dict, in_path, out_path)
