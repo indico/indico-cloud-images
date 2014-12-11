@@ -51,7 +51,7 @@ def _add_tabs(old_content):
 
 def _get_ssh_key(fname):
     data = _read_file(fname).strip()
-    if re.match(r'^ssh-\w+ [a-zA-Z0-9+/]+={0,2} \w+@\w+$', data):
+    if re.match(r'^ssh-\w+ [a-zA-Z0-9+/]+={0,2} \w+@.+$', data):
         return data
     else:
         print(red("Key in '{0}' doesn't seem to be valid! It will be ignored.".format(fname)))
